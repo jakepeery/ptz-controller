@@ -74,18 +74,18 @@ void KeypadPressed(String key){
 }
 
 void KeypadReleasedShort(String key, unsigned long time){
-Serial.printf("short key released: %s   time: %lu seconds\n", key,
-                      time / 1000);
+Serial.printf("short key released: %s   time: %lu ticks\n", key,
+                      time);
 }
 
 void KeypadReleasedLong(String key, unsigned long time){
-  Serial.printf("held key released: %s   time: %lu seconds\n", key,
-                      time / 1000);
+  Serial.printf("held key released: %s   time: %lu ticks\n", key,
+                      time);
 }
 
 void KeypadHeld(String key, unsigned long time){
-  Serial.printf("held key event: %s   time: %lu seconds\n", key,
-                      time / 1000);
+  Serial.printf("held key event: %s   time: %lu ticks\n", key,
+                      time);
 }
 
 //---------------------------------------Keypad Events-----------------------------------------
@@ -205,6 +205,16 @@ unsigned long keypadPressedTime;
 bool currentKeyBeingPressed = false;
 bool keypadHeldEvent = false;
 
+bool zoom_encoder_state = false;
+int zoom_value = 128;
+bool zoom_button_state;
+bool zoom_toggle = false;
+
+bool focus_encoder_state = false;
+int focus_value = 128;
+bool focus_button_state;
+bool focus_toggle = false;
+
 void loop() {
   //-------------------------------------------------------------------------
   //----------------------------------Keypad Events--------------------------
@@ -217,9 +227,9 @@ void loop() {
       currentKeyBeingPressed = false;
       keypadHeldEvent = true;
       keypadPressedTime = millis() - keypadPressedStart;
-      if (keypadPressedTime > press_hold_time) {  // long release
+      if (keypadPressedTime > keypad_press_hold_time) {  // long release
         KeypadReleasedLong(keyPressed, keypadPressedTime);
-      } else if (keypadPressedTime > press_debounce_time) {  // short release
+      } else if (keypadPressedTime > keypad_press_debounce_time) {  // short release
         KeypadReleasedShort(keyPressed, keypadPressedTime);
       }
 
@@ -231,7 +241,7 @@ void loop() {
     }
   }
 
-  if (millis() - keypadPressedStart > press_hold_time && !keypadHeldEvent) {
+  if (millis() - keypadPressedStart > keypad_press_hold_time && !keypadHeldEvent) {
     KeypadHeld(keyPressed, millis() - keypadPressedStart);
     keypadHeldEvent = true;
   }
@@ -239,35 +249,97 @@ void loop() {
   //------------------------------------------------------------------------
 
   // Zoom encoder
-  bool zoom_pressed = zoom_press.buttonDebounce();
-  bool zoom_up = digitalRead(enc_zoom_up_pin);
-  bool zoom_dn = digitalRead(enc_zoom_dn_pin);
-  if (!zoom_pressed || !zoom_up || !zoom_dn){
-    Serial.printf("zoom pressed %d, zoom up: %d, zoom down: %d\n", zoom_pressed, zoom_up, zoom_dn);
+  bool zoom_pressed = !zoom_press.buttonDebounce();
+  if (zoom_pressed != zoom_button_state && zoom_pressed) {
+    
+    if (zoom_toggle) {
+      zoom_toggle = false;
+      Serial.printf("zoom_toggle = %d\n", zoom_toggle);
+    } else {
+      zoom_toggle = true;
+      Serial.printf("zoom_toggle = %d\n", zoom_toggle);
+    }
   }
+  zoom_button_state = zoom_pressed;
 
+
+  bool zoom_up = !digitalRead(enc_zoom_up_pin);
+  bool zoom_dn = !digitalRead(enc_zoom_dn_pin);
+  if ((zoom_up != zoom_encoder_state) && zoom_up) {
+    // Serial.printf("up: %d    down: %d\n", zoom_up, zoom_dn);
+    if (zoom_dn != zoom_up) {
+      Serial.printf("ZOOM UP. value start: %d\n", zoom_value);
+      if (zoom_value < zoom_max) {
+        zoom_value = zoom_value + 1 * zoom_rate_multiplier;
+      } else {
+        zoom_value = zoom_max;
+      }
+      Serial.printf("zoom up. value end: %d\n", zoom_value);
+
+    } else {
+      Serial.printf("ZOOM DOWN. value start: %d\n", zoom_value);
+      if (zoom_value > zoom_min) {
+        zoom_value = zoom_value - 1 * zoom_rate_multiplier;
+      } else {
+        zoom_value = zoom_min;
+      }
+      Serial.printf("zoom down. value end: %d\n", zoom_value);
+    }
+  }
+  zoom_encoder_state = zoom_up;
 
   // Focus encoder
-  bool focus_pressed = focus_press.buttonDebounce();
-  bool focus_up = digitalRead(enc_focus_up_pin);
-  bool focus_dn = digitalRead(enc_focus_dn_pin);  
-  if (!focus_pressed || !focus_up || !focus_dn){
-    Serial.printf("focus pressed %d, focus up: %d, focus down: %d\n", focus_pressed, focus_up, focus_dn);
+  bool focus_pressed = !focus_press.buttonDebounce();
+  if (focus_pressed != focus_button_state && focus_pressed) {
+     
+    if (focus_toggle) {
+      focus_toggle = false;
+      Serial.printf("focus_toggle = %d\n", focus_toggle);
+    } else {
+      focus_toggle = true;
+      Serial.printf("focus_toggle = %d\n", focus_toggle);
+    }
   }
+  focus_button_state = focus_pressed;
 
-  //Joystick #1 - cheap style
+
+  bool focus_up = !digitalRead(enc_focus_up_pin);
+  bool focus_dn = !digitalRead(enc_focus_dn_pin);
+  if ((focus_up != focus_encoder_state) && focus_up) {
+    
+    if (focus_dn != focus_up) {
+      Serial.printf("FOCUS UP. value start: %d\n", focus_value);
+      if (focus_value < focus_max) {
+        focus_value = focus_value + 1 * focus_rate_multiplier;
+      } else {
+        focus_value = focus_max;
+      }
+      Serial.printf("focus up. value end: %d\n", focus_value);
+    } else {
+      Serial.printf("FOCUS DOWN. value start: %d\n", focus_value);
+      if (focus_value > focus_min) {
+        focus_value = focus_value - 1 * focus_rate_multiplier;
+      } else {
+        focus_value = focus_min;
+      }
+      Serial.printf("focus down. value end: %d\n", focus_value);
+    }
+  }
+  focus_encoder_state = focus_up;
+
+  // Joystick #1 - cheap style
   bool joystick_pressed = joystick_press.buttonDebounce();
   int joystick_x = analogRead(joystick_x_pin);
   int joystick_y = analogRead(joystick_y_pin);
 
   if (!joystick_pressed) {
-    //Serial.println("Joystick Pressed");
+    // Serial.println("Joystick Pressed");
   }
 
-  if (joystick_x < 1800 || joystick_y < 1800 || joystick_x > 2020 || joystick_y > 2020) {
-    //Serial.printf("Joystick X, Y: %d, %d\n", joystick_x, joystick_y);
+  if (joystick_x < 1800 || joystick_y < 1800 || joystick_x > 2020 ||
+      joystick_y > 2020) {
+    // Serial.printf("Joystick X, Y: %d, %d\n", joystick_x, joystick_y);
   }
 
-
-// delay(100);
+  // delay(100);
 }
