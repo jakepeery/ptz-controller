@@ -71,31 +71,68 @@ String ScanKeypad(){
 //---------------------------------------Keypad Events-----------------------------------------
 void KeypadPressed(String key){
     Serial.printf("\nraw key pressed: %s\n", key);
+    Serial2.printf("key_raw:%s\r\n", key);
 }
 
 void KeypadReleasedShort(String key, unsigned long time){
-Serial.printf("short key released: %s   time: %lu ticks\n", key,
+  Serial.printf("short key released: %s   time: %lu ticks\n", key,
                       time);
+  Serial2.printf("key_short:%s\r\n", key);
 }
 
 void KeypadReleasedLong(String key, unsigned long time){
   Serial.printf("held key released: %s   time: %lu ticks\n", key,
                       time);
+  Serial2.printf("key_long:%s\r\n", key);
 }
 
 void KeypadHeld(String key, unsigned long time){
   Serial.printf("held key event: %s   time: %lu ticks\n", key,
                       time);
+  Serial2.printf("key_held:%s\r\n", key);
 }
 
 //---------------------------------------Keypad Events-----------------------------------------
 //---------------------------------------------------------------------------------------------
 
+
+
+//---------------------------------------------------------------------------------------------
+//---------------------------------------Joystick Events-----------------------------------------
+void JoystickPressed(String joystick){
+    Serial.printf("\nraw joystick pressed: %s\n", joystick);
+    Serial2.printf("joystick_raw:%s\r\n", joystick);
+}
+
+void JoystickReleasedShort(String joystick, unsigned long time){
+  Serial.printf("short joystick released: %s   time: %lu ticks\n", joystick,
+                      time);
+  Serial2.printf("joystick_short_released:%s\r\n", joystick);
+}
+
+void JoystickReleasedLong(String joystick, unsigned long time){
+  Serial.printf("held joystick released: %s   time: %lu ticks\n", joystick,
+                      time);
+  Serial2.printf("joystick_long_released:%s\r\n", joystick);
+}
+
+void JoystickHeld(String joystick, unsigned long time){
+  Serial.printf("held joystick event: %s   time: %lu ticks\n", joystick,
+                      time);
+  Serial2.printf("joystick_held:%s\r\n", joystick);
+}
+
+//---------------------------------------Joystick Events-----------------------------------------
+//---------------------------------------------------------------------------------------------
+
 void setup() {
   Serial.begin(115200);
+  Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
   delay(1000);
   printHardwareInfo();
+  Serial2.println("Starting Controls ESP32");
   delay(1000);
+  Serial2.println("Starting Controls ESP32");
   
   const int debaounce_delay = 50;
 
@@ -205,6 +242,11 @@ unsigned long keypadPressedTime;
 bool currentKeyBeingPressed = false;
 bool keypadHeldEvent = false;
 
+unsigned long joystickPressedStart;
+unsigned long joystickPressedTime;
+bool joystickLastState = false;
+bool joystickHeldEvent = false;
+
 bool zoom_encoder_state = false;
 int zoom_value = 128;
 bool zoom_button_state;
@@ -222,15 +264,15 @@ void loop() {
   keyPressed = ScanKeypad();
 
   if (keyPressed != lastKeyPressed) {  // key state changes
-    lastKeyPressed = keyPressed;
+    
     if (keyPressed == "") {  // key released
       currentKeyBeingPressed = false;
       keypadHeldEvent = true;
       keypadPressedTime = millis() - keypadPressedStart;
       if (keypadPressedTime > keypad_press_hold_time) {  // long release
-        KeypadReleasedLong(keyPressed, keypadPressedTime);
+        KeypadReleasedLong(lastKeyPressed, keypadPressedTime);
       } else if (keypadPressedTime > keypad_press_debounce_time) {  // short release
-        KeypadReleasedShort(keyPressed, keypadPressedTime);
+        KeypadReleasedShort(lastKeyPressed, keypadPressedTime);
       }
 
     } else {  // key pressed
@@ -239,6 +281,7 @@ void loop() {
       keypadHeldEvent = false;
       keypadPressedStart = millis();
     }
+    lastKeyPressed = keyPressed;
   }
 
   if (millis() - keypadPressedStart > keypad_press_hold_time && !keypadHeldEvent) {
@@ -251,7 +294,6 @@ void loop() {
   // Zoom encoder
   bool zoom_pressed = !zoom_press.buttonDebounce();
   if (zoom_pressed != zoom_button_state && zoom_pressed) {
-    
     if (zoom_toggle) {
       zoom_toggle = false;
       Serial.printf("zoom_toggle = %d\n", zoom_toggle);
@@ -259,6 +301,7 @@ void loop() {
       zoom_toggle = true;
       Serial.printf("zoom_toggle = %d\n", zoom_toggle);
     }
+    Serial2.printf("zoom_toggle:%d\r\n", zoom_toggle);
   }
   zoom_button_state = zoom_pressed;
 
@@ -271,10 +314,13 @@ void loop() {
       Serial.printf("ZOOM UP. value start: %d\n", zoom_value);
       if (zoom_value < zoom_max) {
         zoom_value = zoom_value + 1 * zoom_rate_multiplier;
+        
       } else {
         zoom_value = zoom_max;
       }
       Serial.printf("zoom up. value end: %d\n", zoom_value);
+      Serial2.printf("zoom_value:%d\r\n", zoom_value);
+      Serial2.printf("zoom_up:1\r\n");
 
     } else {
       Serial.printf("ZOOM DOWN. value start: %d\n", zoom_value);
@@ -284,6 +330,8 @@ void loop() {
         zoom_value = zoom_min;
       }
       Serial.printf("zoom down. value end: %d\n", zoom_value);
+      Serial2.printf("zoom_value:%d\r\n", zoom_value);
+      Serial2.printf("zoom_down:1\r\n");
     }
   }
   zoom_encoder_state = zoom_up;
@@ -291,7 +339,6 @@ void loop() {
   // Focus encoder
   bool focus_pressed = !focus_press.buttonDebounce();
   if (focus_pressed != focus_button_state && focus_pressed) {
-     
     if (focus_toggle) {
       focus_toggle = false;
       Serial.printf("focus_toggle = %d\n", focus_toggle);
@@ -299,6 +346,7 @@ void loop() {
       focus_toggle = true;
       Serial.printf("focus_toggle = %d\n", focus_toggle);
     }
+    Serial2.printf("focus_toggle:%d\r\n", focus_toggle);
   }
   focus_button_state = focus_pressed;
 
@@ -315,6 +363,8 @@ void loop() {
         focus_value = focus_max;
       }
       Serial.printf("focus up. value end: %d\n", focus_value);
+      Serial2.printf("focus_value:%d\r\n", focus_value);
+      Serial2.printf("focus_up:1\r\n");
     } else {
       Serial.printf("FOCUS DOWN. value start: %d\n", focus_value);
       if (focus_value > focus_min) {
@@ -323,23 +373,59 @@ void loop() {
         focus_value = focus_min;
       }
       Serial.printf("focus down. value end: %d\n", focus_value);
+      Serial2.printf("focus_value:%d\r\n", focus_value);
+      Serial2.printf("focus_down:1\r\n");
     }
   }
   focus_encoder_state = focus_up;
 
   // Joystick #1 - cheap style
-  bool joystick_pressed = joystick_press.buttonDebounce();
+  bool joystick_pressed = !joystick_press.buttonDebounce();
   int joystick_x = analogRead(joystick_x_pin);
   int joystick_y = analogRead(joystick_y_pin);
+  int joystick_twist = analogRead(joystick_twist_pin);
 
-  if (!joystick_pressed) {
-    // Serial.println("Joystick Pressed");
+  if (joystick_pressed != joystickLastState) {  // key state changes
+    joystickLastState = joystick_pressed;
+    if (joystick_pressed == false) {  // key released
+      currentKeyBeingPressed = false;
+      joystickHeldEvent = true;
+      joystickPressedTime = millis() - joystickPressedStart;
+      if (joystickPressedTime > joystick_press_hold_time) {  // long release
+        JoystickReleasedLong("1", joystickPressedTime);
+      } else if (joystickPressedTime > joystick_press_debounce_time) {  // short release
+        JoystickReleasedShort("1", joystickPressedTime);
+      }
+
+    } else {  // key pressed
+      JoystickPressed("1");
+      currentKeyBeingPressed = true;
+      joystickHeldEvent = false;
+      joystickPressedStart = millis();
+    }
   }
 
-  if (joystick_x < 1800 || joystick_y < 1800 || joystick_x > 2020 ||
-      joystick_y > 2020) {
-    // Serial.printf("Joystick X, Y: %d, %d\n", joystick_x, joystick_y);
+  if (millis() - joystickPressedStart > keypad_press_hold_time && !joystickHeldEvent) {
+    JoystickHeld("1", millis() - joystickPressedStart);
+    joystickHeldEvent = true;
   }
 
-  // delay(100);
+
+  // if (!joystick_pressed) {
+  //    Serial.println("Joystick Pressed");
+  //    Serial2.printf("joystick_pressed:%d\r\n", joystick_pressed);
+     
+  // }
+
+  if (joystick_x < 1500 || joystick_y < 1500 || joystick_x > 2200 ||
+      joystick_y > 2200) {
+     Serial.printf("Joystick X, Y: %d, %d\n", joystick_x, joystick_y);
+     Serial2.printf("joystick_x_y:%d,%d\r\n", joystick_x, joystick_y);
+  }
+  if (joystick_twist < 1500 || joystick_twist > 2200) {
+    Serial.printf("Joystick Twist: %d\n", joystick_twist);
+    Serial2.printf("joystick_twist:%d\r\n", joystick_twist);
+  }
+
+   //delay(30);
 }

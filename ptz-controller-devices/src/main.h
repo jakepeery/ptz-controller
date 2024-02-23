@@ -41,10 +41,16 @@
 
 
 //voltage/analog
-#define joystick_press_pin 39 //pull up
+#define joystick_press_pin 4 //pull up
+#define joystick_press_hold_time 3000
+#define joystick_press_debounce_time 20
+
 #define joystick_x_pin 34
 #define joystick_y_pin 35
 #define joystick_twist_pin 36
+
+#define RXD2 16
+#define TXD2 17
 
 
 
