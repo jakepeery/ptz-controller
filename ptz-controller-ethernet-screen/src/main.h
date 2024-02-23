@@ -1,47 +1,29 @@
 #include <Arduino.h>
 
 #include "SPIFFS.h"
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <Preferences.h>
+#include "SPIFFS.h"
 
-// time in ms to reset the encoder press button selection to the default of the
-// mode selection not temp selection
-// aka wait 5 seconds to go back to selecting on/off/occupied
-// Replace with your network credentials
 
-#define reset_time 5000
+#define RXD2 5
+#define TXD2 17
 
-// safety temperatures
-#define exhaust_top_max_temp_safety 250
-#define exhaust_bottom_max_temp_safety 200
 
-// relay pins - GPO
-#define GAS_RELAY 18
-#define FAN_RELAY 19
-#define EXHAUST_RELAY 23
+// OLED Pins
+#define OLED_SCL 4
+#define OLED_SDA 14
 
-// encoder pins - GPI
-#define PRESS 25
-#define UP 32
-#define DOWN 33
 
-// OLED Piuns
-#define OLED_SCL 22
-#define OLED_SDA 21
 
-struct Temps {
-  float ROOM_TEMP;
-  float EXHAUST_BOTTOM_TEMP;
-  float EXHAUST_TOP_TEMP;
-};
-
-struct UserSettableData {
-  Temps SENSOR_TEMPS;
-  char IPAddress[64];
-  char WifiMode[64];
-  bool GAS_ON = false;
-  bool FAN_ON = false;
-  bool EXHAUST_ON = false;
-  float LOW_TEMP_SET;   // initialize value from parameter memory
-  float HIGH_TEMP_SET;  // initialize value from parameter memory
-  int SELECTED_MODE;
-  // 1=Unoccupied  2=Heater On  3=Full Off  4=Exhaust Fan  5=Fan and Exhaust On
-};
+#define SCREEN_WIDTH 128  // OLED display width, in pixels
+#define SCREEN_HEIGHT 64  // OLED display height, in pixels
+// Declaration for an SSD1306 display connected to I2C (SDA, SCL pins)
+// The pins for I2C are defined by the Wire-library.
+// On an arduino UNO:       A4(SDA), A5(SCL)
+// On an arduino MEGA 2560: 20(SDA), 21(SCL)
+// On an arduino LEONARDO:   2(SDA),  3(SCL), ...
+#define OLED_RESET -1  // Reset pin # (or -1 if sharing Arduino reset pin)
+#define SCREEN_ADDRESS \
+  0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
