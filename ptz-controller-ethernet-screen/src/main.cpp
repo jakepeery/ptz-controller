@@ -5,7 +5,7 @@
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 int JOYSTICK_X, JOYSTICK_Y, JOYSTICK_TWIST;
-int SELECTED_CAMERA = 0;
+int SELECTED_CAMERA = 1;
 
 static String STATUS_TEXT;
 
@@ -338,8 +338,8 @@ void EvaluateRXString(String RX) {
 
     } else if (command == "joystick_raw") {
       // STATUS_TEXT = command;
-    } else if (command == "Joystick Short") {
-      STATUS_TEXT = command;
+    } else if (command == "joystick_short_released") {
+      STATUS_TEXT = "Joystick Short";
     } else if (command == "joystick_long_released") {
       // STATUS_TEXT = command;
     } else if (command == "joystick_held") {
