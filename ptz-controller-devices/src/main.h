@@ -52,6 +52,9 @@
 #define RXD2 16
 #define TXD2 17
 
+//time in ticks/ms to pace the joystick read/writes to serial
+#define joystickAnalogPaceTime 30 
+
 
 
 

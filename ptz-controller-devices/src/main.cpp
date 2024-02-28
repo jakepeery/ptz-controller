@@ -125,6 +125,29 @@ void JoystickHeld(String joystick, unsigned long time){
 //---------------------------------------Joystick Events-----------------------------------------
 //---------------------------------------------------------------------------------------------
 
+
+
+int EvaluateAnalog(int value){
+  int rtnValue = 0;
+  value = value - 1800;
+  if (value > -300 && value < 300){
+    rtnValue = 0;
+  }  else if (value < -1800){
+    rtnValue = -20;
+
+  } else if (value > 2295){
+    rtnValue = 20;
+  } else if (value <= -200){
+    rtnValue = value / 90;
+
+  } else if (value >= 200){
+    rtnValue = value / 114;
+  }
+  return rtnValue;
+}
+
+
+
 void setup() {
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
@@ -257,6 +280,10 @@ int focus_value = 128;
 bool focus_button_state;
 bool focus_toggle = false;
 
+unsigned long joystickPacer;
+
+int x_send, y_send, twist_send;
+
 void loop() {
   //-------------------------------------------------------------------------
   //----------------------------------Keypad Events--------------------------
@@ -319,7 +346,7 @@ void loop() {
         zoom_value = zoom_max;
       }
       Serial.printf("zoom up. value end: %d\n", zoom_value);
-      Serial2.printf("zoom_value:%d\r\n", zoom_value);
+      //Serial2.printf("zoom_value:%d\r\n", zoom_value);
       Serial2.printf("zoom_up:1\r\n");
 
     } else {
@@ -330,7 +357,7 @@ void loop() {
         zoom_value = zoom_min;
       }
       Serial.printf("zoom down. value end: %d\n", zoom_value);
-      Serial2.printf("zoom_value:%d\r\n", zoom_value);
+      //Serial2.printf("zoom_value:%d\r\n", zoom_value);
       Serial2.printf("zoom_down:1\r\n");
     }
   }
@@ -363,7 +390,7 @@ void loop() {
         focus_value = focus_max;
       }
       Serial.printf("focus up. value end: %d\n", focus_value);
-      Serial2.printf("focus_value:%d\r\n", focus_value);
+      //Serial2.printf("focus_value:%d\r\n", focus_value);
       Serial2.printf("focus_up:1\r\n");
     } else {
       Serial.printf("FOCUS DOWN. value start: %d\n", focus_value);
@@ -373,7 +400,7 @@ void loop() {
         focus_value = focus_min;
       }
       Serial.printf("focus down. value end: %d\n", focus_value);
-      Serial2.printf("focus_value:%d\r\n", focus_value);
+      //Serial2.printf("focus_value:%d\r\n", focus_value);
       Serial2.printf("focus_down:1\r\n");
     }
   }
@@ -381,9 +408,7 @@ void loop() {
 
   // Joystick #1 - cheap style
   bool joystick_pressed = !joystick_press.buttonDebounce();
-  int joystick_x = analogRead(joystick_x_pin);
-  int joystick_y = analogRead(joystick_y_pin);
-  int joystick_twist = analogRead(joystick_twist_pin);
+
 
   if (joystick_pressed != joystickLastState) {  // key state changes
     joystickLastState = joystick_pressed;
@@ -411,21 +436,48 @@ void loop() {
   }
 
 
-  // if (!joystick_pressed) {
-  //    Serial.println("Joystick Pressed");
-  //    Serial2.printf("joystick_pressed:%d\r\n", joystick_pressed);
-     
-  // }
+  //slow down the joystick writes
+  if (millis() > joystickPacer) {
+    joystickPacer = millis() + joystickAnalogPaceTime;
+ 
+    int joystick_x = analogRead(joystick_x_pin);
+    int joystick_y = analogRead(joystick_y_pin);
+    int joystick_twist = analogRead(joystick_twist_pin);
 
-  if (joystick_x < 1500 || joystick_y < 1500 || joystick_x > 2200 ||
-      joystick_y > 2200) {
-     Serial.printf("Joystick X, Y: %d, %d\n", joystick_x, joystick_y);
-     Serial2.printf("joystick_x_y:%d,%d\r\n", joystick_x, joystick_y);
-  }
-  if (joystick_twist < 1500 || joystick_twist > 2200) {
-    Serial.printf("Joystick Twist: %d\n", joystick_twist);
-    Serial2.printf("joystick_twist:%d\r\n", joystick_twist);
-  }
+    // //shift the values
+    // joystick_x = joystick_x - (4095/2);
+    // joystick_y = joystick_y - (4095/2);
+    // joystick_twist = joystick_twist - (4095/2);
 
-   //delay(30);
+    // //range the values
+    // int high = 10;
+
+    // joystick_x = (int)((float)joystick_x/(4095.0/2) * high);
+    // joystick_y = (int)((float)joystick_y/(4095.0/2) * high);
+    // joystick_twist = (int)((float)joystick_twist/(4095.0/2) * high);
+    Serial.printf("X:%d, Y:%d, T:%d\n", joystick_x,  joystick_y, joystick_twist);
+
+
+    joystick_x = EvaluateAnalog(joystick_x);
+    joystick_y = -1 * EvaluateAnalog(joystick_y);
+    joystick_twist = EvaluateAnalog(joystick_twist);
+
+
+    if (x_send != joystick_x) {
+      x_send = joystick_x;
+      Serial.printf("Joystick X: %d\n", x_send);
+      Serial2.printf("joystick_x:%d\r\n", x_send);
+    }
+    if (y_send != joystick_y) {
+      y_send = joystick_y;
+      Serial.printf("Joystick Y: %d\n", y_send);
+      Serial2.printf("joystick_y:%d\r\n", y_send);
+    }
+
+    if (twist_send != joystick_twist) {
+      twist_send = joystick_twist;
+      Serial.printf("Joystick Twist: %d\n", twist_send);
+      Serial2.printf("joystick_twist:%d\r\n", twist_send);
+    }
+  }
 }
