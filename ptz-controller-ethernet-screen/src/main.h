@@ -41,7 +41,7 @@
 QueueHandle_t UDP_Queue;
 
 struct UDP_Info {
-  char IP_Address[64];
+  IPAddress IP_Address;
   int Port;
   String Message;
 };

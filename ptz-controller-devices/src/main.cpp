@@ -462,7 +462,7 @@ void loop() {
 
 
     joystick_x = EvaluateAnalog(joystick_x);
-    joystick_y = -1 * EvaluateAnalog(joystick_y);
+    joystick_y = EvaluateAnalog(joystick_y);
     joystick_twist = EvaluateAnalog(joystick_twist);
 
 

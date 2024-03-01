@@ -4,8 +4,8 @@
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
-int JOYSTICK_X, JOYSTICK_Y, JOYSTICK_TWIST;
-int SELECTED_CAMERA = 1;
+static int JOYSTICK_X, JOYSTICK_Y, JOYSTICK_TWIST;
+static int SELECTED_CAMERA = 1;
 
 
 static String STATUS_TEXT;
@@ -17,13 +17,11 @@ static bool udp_connected = false;
 
 AsyncUDP udp;
 
-IPAddress camera_IPs[5];
-int visca_port[5];
 
 struct CameraProperties{
-  int max_pan;
-  int max_tilt;
-  int max_zoom;
+  int max_pan = 24;
+  int max_tilt = 23;
+  int max_zoom = 7;
   IPAddress ipAddress;
   int visca_port;
 };
@@ -35,7 +33,51 @@ int selected_max;
 
 
 
+#define up char(1)    //"\x01"
+#define down char(2)  //"\x02"
+#define left char(1)  //"\x01"
+#define right char(2) //"\x02"
+#define stop char(3)  //"\x03"
+// expects a pan / x and tilt / y value for the intended speed\
+// pan range = -24 to 24 decimal
+// tilt range = -23 to 23 decimal 
+void EvaluatePanTilt(int x, int y, String *command){
+  char ptzPrefix[] ="\x81\x01\x06\x01";
+  char x_direction, y_direction;
+  char x_speed, y_speed;
 
+  //limit incoming to available VISCA speed options
+  if (x > 24) { x = 24;}
+  if (x < -24) { x = -24;}
+  if (y > 23) { y = 23;}
+  if (y < -23) { y = -23;}
+  if (x == 0){
+      x_direction = stop;
+      x_speed = char(1);
+  } else if (x < 0){
+      x_direction = left;
+      x_speed = char(abs(x));
+  } else if (x > 0){
+      x_direction = right;
+      x_speed = char(abs(x));
+  }
+
+    if (y == 0){
+      y_direction = stop;
+      y_speed = char(1); 
+  } else if (y < 0){
+      y_direction = left;
+      y_speed = char(abs(y));
+  } else if (y > 0){
+      y_direction = right;
+      y_speed = char(abs(y));
+    }
+  //Serial.printf("%s%c%c%c%c%c", ptzPrefix, x_speed, y_speed, x_direction, y_direction, char(255));
+  char temp[24];
+  sprintf(temp, "%s%c%c%c%c%c", ptzPrefix, x_speed, y_speed, x_direction, y_direction, char(255));
+
+  *command = String(temp);
+}
 
 
 
@@ -225,8 +267,8 @@ void Encoder1(bool direction) {
 void Encoder1Press(bool state){
 
     UDP_Info Testing;
-    strcpy(Testing.IP_Address, "192.168.1.28");
-    Testing.Port = 52381;
+    Testing.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
+    Testing.Port = cameras[SELECTED_CAMERA].visca_port;
     Testing.Message = "UDP Message To Send";
 
     xQueueSend(UDP_Queue, (void*)&Testing, (TickType_t) 0);
@@ -257,14 +299,14 @@ void Encoder2(bool direction) {
     cameras[SELECTED_CAMERA].max_zoom = 7;
   }
 
-  if (cameras[SELECTED_CAMERA].max_pan < 0){
-    cameras[SELECTED_CAMERA].max_pan = 0;
+  if (cameras[SELECTED_CAMERA].max_pan < 1){
+    cameras[SELECTED_CAMERA].max_pan = 1;
   }
-  if (cameras[SELECTED_CAMERA].max_tilt < 0){
-    cameras[SELECTED_CAMERA].max_tilt = 0;
+  if (cameras[SELECTED_CAMERA].max_tilt < 1){
+    cameras[SELECTED_CAMERA].max_tilt = 1;
   }
-  if (cameras[SELECTED_CAMERA].max_zoom < 0){
-    cameras[SELECTED_CAMERA].max_zoom = 0;
+  if (cameras[SELECTED_CAMERA].max_zoom < 1){
+    cameras[SELECTED_CAMERA].max_zoom = 1;
   }
 
   //to do add in storing to persistent storage
@@ -286,33 +328,45 @@ void Encoder2Press(bool state){
 
 
 void EvaluateRXString(String RX) {
+  static int newJoystickX;
+  static int newJoystickY;
   const char* rx_chars = RX.c_str();
-  Serial.printf("Evaluating RX: %s\n", rx_chars);
+  // Serial.printf("Evaluating RX: %s\n", rx_chars);
 
   String command, value;
 
   // split the string on the :
   String xy_response = ":";
   int split = RX.indexOf(xy_response);
+
   if (split > 0) {
     String command = RX.substring(0, split);
     String value = RX.substring(split + 1);
 
     split = value.indexOf(String("\r"));
     value = value.substring(0, split); //remove the \r\n
-    Serial.print("X command: ");
-    Serial.println(command);
 
-    Serial.print("command == joystick_x ");
-    Serial.println(command == "joystick_x");
+    
 
     // event triggers
+    
     if (command == "joystick_x") {
-      JOYSTICK_X = value.toInt();
+      int temp_x = value.toInt();
+      newJoystickX = (int)((float)temp_x *
+                           (float)(cameras[SELECTED_CAMERA].max_pan / 100.0));
+      // newJoystickX = temp_x * int(float(cameras[SELECTED_CAMERA].max_pan) / 100.0);
+
     } else if (command == "joystick_y") {
-      JOYSTICK_Y = value.toInt();
+      int temp_y = value.toInt();
+      newJoystickY = (int)((float)temp_y *
+                           (float)(cameras[SELECTED_CAMERA].max_tilt / 100.0));
+      // newJoystickY = temp_y * int(float(cameras[SELECTED_CAMERA].max_tilt) / 100.0);
+
     } else if (command == "joystick_twist") {
-      JOYSTICK_TWIST = value.toInt();
+      int temp_twist = value.toInt();
+      JOYSTICK_TWIST =
+          (int)((float)temp_twist *
+                (float)(cameras[SELECTED_CAMERA].max_zoom / 100.0));
 
     } else if (command == "joystick_raw") {
       // STATUS_TEXT = command;
@@ -322,8 +376,7 @@ void EvaluateRXString(String RX) {
       // STATUS_TEXT = command;
     } else if (command == "joystick_held") {
       STATUS_TEXT = "Joystick Held";
-    }
-      else if (command == "encoder1_press") {
+    } else if (command == "encoder1_press") {
       Encoder1Press(value.toInt());
     } else if (command == "encoder1_up") {
       Encoder1(true);
@@ -340,43 +393,62 @@ void EvaluateRXString(String RX) {
     } else if (command == "key_raw") {
       // raw keypad here
     } else if (command == "key_short") {
-        if (value.equals("A")){
-          SELECTED_CAMERA = 1;
-        } else if (value.equals("B")){
-          SELECTED_CAMERA = 2;
-        } else if (value.equals("C")){
-          SELECTED_CAMERA = 3;
-        } else if (value.equals("D")){
-          SELECTED_CAMERA = 4;
-        } else if (value.equals("*")){
-          STATUS_TEXT = "Key Pressed *";
-        } else if (value.equals("#")){
-          STATUS_TEXT = "Key Pressed #";
-        } else{
-          RecallPreset(value.toInt());
-        }
+      if (value.equals("A")) {
+        SELECTED_CAMERA = 1;
+      } else if (value.equals("B")) {
+        SELECTED_CAMERA = 2;
+      } else if (value.equals("C")) {
+        SELECTED_CAMERA = 3;
+      } else if (value.equals("D")) {
+        SELECTED_CAMERA = 4;
+      } else if (value.equals("*")) {
+        STATUS_TEXT = "Key Pressed *";
+      } else if (value.equals("#")) {
+        STATUS_TEXT = "Key Pressed #";
+      } else {
+        RecallPreset(value.toInt());
+      }
     } else if (command == "key_long") {
       // STATUS_TEXT = command + " " + value;
     } else if (command == "key_held") {
-        if (value.equals("A")){
-          SELECTED_CAMERA = 1;
-        } else if (value.equals("B")){
-          SELECTED_CAMERA = 2;
-        } else if (value.equals("C")){
-          SELECTED_CAMERA = 3;
-        } else if (value.equals("D")){
-          SELECTED_CAMERA = 4;
-        } else if (value.equals("*")){
-          STATUS_TEXT = "Key Held *";
-        } else if (value.equals("#")){
-          STATUS_TEXT = "Key Held #";
-        } else{
-          StorePreset(value.toInt());
-        }
+      if (value.equals("A")) {
+        SELECTED_CAMERA = 1;
+      } else if (value.equals("B")) {
+        SELECTED_CAMERA = 2;
+      } else if (value.equals("C")) {
+        SELECTED_CAMERA = 3;
+      } else if (value.equals("D")) {
+        SELECTED_CAMERA = 4;
+      } else if (value.equals("*")) {
+        STATUS_TEXT = "Key Held *";
+      } else if (value.equals("#")) {
+        STATUS_TEXT = "Key Held #";
+      } else {
+        StorePreset(value.toInt());
+      }
     }
   } else {
     Serial.println("ERROR: BAD FORMATTING, NO ':'");
     return;
+  }
+
+
+  if (JOYSTICK_X != newJoystickX || JOYSTICK_Y != newJoystickY){
+    JOYSTICK_X = newJoystickX;
+    JOYSTICK_Y = newJoystickY;
+    // Serial.print("JoystickX: ");
+    // Serial.println(JOYSTICK_X);
+    // Serial.print("JoystickY: ");
+    // Serial.println(JOYSTICK_Y);
+
+    String pan_tilt_cmd;
+    EvaluatePanTilt(JOYSTICK_X, JOYSTICK_Y, &pan_tilt_cmd);
+    UDP_Info ToSend;
+    ToSend.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
+    ToSend.Port = cameras[SELECTED_CAMERA].visca_port;
+    ToSend.Message = pan_tilt_cmd;
+      
+    xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
   }
 }
 
@@ -427,49 +499,7 @@ void Net_Event(WiFiEvent_t event){
 
 
 
-#define up "\x01"
-#define down "\x02"
-#define left "\x01"
-#define right "\x02"
-#define stop "\x03"
-// expects a pan / x and tilt / y value for the intended speed\
-// pan range = -24 to 24 decimal
-// tilt range = -23 to 23 decimal 
-void EvaluatePanTilt(int x, int y, char* command){
-  const char ptzPrefix[] ="\x80\x01\x06\x01\x0a";
-  char *x_direction, *y_direction;
-  char *x_speed, *y_speed;
 
-  //limit incoming to available VISCA speed options
-  if (x > 24) { x = 24;}
-  if (x < -24) { x = -24;}
-  if (y > 23) { y = 23;}
-  if (y < -23) { y = -23;}
-
-  if (x == 0){
-    strcpy(x_direction, stop);
-    strcpy(x_speed, "\x01");
-  } else if (x < 0){
-    strcpy(x_direction, left);
-    sprintf(x_speed, "%d", abs(x));
-  } else if (x > 0){
-    strcpy(x_direction, right);
-    sprintf(x_speed, "%d", abs(x));
-  }
-
-    if (y == 0){
-    strcpy(y_direction, stop);
-    strcpy(y_speed, "\x01");
-  } else if (y < 0){
-    strcpy(y_direction, left);
-    sprintf(y_speed, "%d", abs(y));
-  } else if (y > 0){
-    strcpy(y_direction, right);
-    sprintf(y_speed, "%d", abs(y));
-  }
-
-  sprintf(command, "%s%s%s%s%s%s", ptzPrefix, x_speed, y_speed, x_direction, y_direction, "\xFF");
-}
 
 UDP_Info received_item;
 int lastCamTracking;
@@ -478,14 +508,14 @@ void SendVISCACommands(void* pvParameters) {
     // make sure to be connected to the proper camera
     if (lastCamTracking != SELECTED_CAMERA) {
       lastCamTracking = SELECTED_CAMERA;
-      if (udp.connect(camera_IPs[SELECTED_CAMERA],
-                      visca_port[SELECTED_CAMERA])) {
+      if (udp.connect(cameras[SELECTED_CAMERA].ipAddress,
+                      cameras[SELECTED_CAMERA].visca_port)) {
         udp_connected = true;
         udp.printf("Connecting to camera: %d\nIP:", SELECTED_CAMERA);
-        udp.println(camera_IPs[SELECTED_CAMERA]);
+        udp.println(cameras[SELECTED_CAMERA].ipAddress);
 
         Serial.printf("Connecting to camera: %d\nIP:", SELECTED_CAMERA);
-        Serial.println(camera_IPs[SELECTED_CAMERA]);
+        Serial.println(cameras[SELECTED_CAMERA].ipAddress);
       } else {
         udp_connected = false;
       }
@@ -499,13 +529,13 @@ void SendVISCACommands(void* pvParameters) {
         break;
       }
 
-      Serial.print(received_item.IP_Address);
-      Serial.print("ETH.linkUp()  ");
-      Serial.println(ETH.linkUp());
+      // Serial.print(received_item.IP_Address);
+      // Serial.print("  Message:");
+      // Serial.println(received_item.Message);
+      udp.print(received_item.Message);
 
-    } else {
     }
-    vTaskDelay(200);
+    vTaskDelay(2);
   }
 }
 
@@ -515,10 +545,10 @@ void setup() {
   cameras[2].ipAddress = IPAddress(192, 168, 1, 29);
   cameras[3].ipAddress = IPAddress(192, 168, 1, 30);
   cameras[4].ipAddress = IPAddress(192, 168, 1, 101);
-  cameras[1].visca_port = 52381;
-  cameras[2].visca_port = 52381;
-  cameras[3].visca_port = 52381;
-  cameras[4].visca_port = 52381;
+  cameras[1].visca_port = 1259;
+  cameras[2].visca_port = 1259;
+  cameras[3].visca_port = 1259;
+  cameras[4].visca_port = 1259;
 
   //to do initialize max ptz values from persistent storage 
   //*******(maybe just initialize the entire cameras struct??)*******
@@ -580,8 +610,8 @@ void loop() {
   String toPrint;
   if (Serial2.available()) {
     RXString = Serial2.readStringUntil('\n');
-    Serial.print("RX ");
-    Serial.println(RXString);
+    // Serial.print("RX ");
+    // Serial.println(RXString);
     EvaluateRXString(RXString);
   }
 
