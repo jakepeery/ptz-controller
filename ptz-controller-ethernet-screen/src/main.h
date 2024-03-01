@@ -5,6 +5,12 @@
 #include <Adafruit_SSD1306.h>
 #include <Preferences.h>
 #include "SPIFFS.h"
+#include <SPI.h>
+
+
+#include "ETH.h"
+#include "udp.h"
+#include "AsyncUDP.h"
 
 
 #define RXD2 5
@@ -27,3 +33,15 @@
 #define OLED_RESET -1  // Reset pin # (or -1 if sharing Arduino reset pin)
 #define SCREEN_ADDRESS \
   0x3C  ///< See datasheet for Address; 0x3D for 128x64, 0x3C for 128x32
+
+
+
+
+
+QueueHandle_t UDP_Queue;
+
+struct UDP_Info {
+  char IP_Address[64];
+  int Port;
+  String Message;
+};

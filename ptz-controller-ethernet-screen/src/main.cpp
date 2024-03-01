@@ -1,13 +1,41 @@
 #include "main.h"
 
-#include "webserver.h"
+
 
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 int JOYSTICK_X, JOYSTICK_Y, JOYSTICK_TWIST;
 int SELECTED_CAMERA = 1;
 
+
 static String STATUS_TEXT;
+
+static TaskHandle_t SendUDP_Task;
+
+static bool eth_connected = false;
+static bool udp_connected = false;
+
+AsyncUDP udp;
+
+IPAddress camera_IPs[5];
+int visca_port[5];
+
+struct CameraProperties{
+  int max_pan;
+  int max_tilt;
+  int max_zoom;
+  IPAddress ipAddress;
+  int visca_port;
+};
+
+CameraProperties cameras[5];
+
+int selected_max;
+
+
+
+
+
 
 
 
@@ -49,145 +77,12 @@ void IpAddressScreen() {
   display.display();
 }
 
-void drawScreen(float tmp1, float tmp2, float tmp3, float highTemp,
-                float lowTemp, int mode, int selected) {
-  display.clearDisplay();
-
-  display.setTextColor(SSD1306_WHITE);  // Draw white text
-  display.setCursor(0, 0);              // Start at top-left corner
-  display.cp437(true);  // Use full 256 char 'Code Page 437' font
-
-  char stat[64];
-  switch (mode) {
-    case 1:
-      strcpy(stat, "UnOccupied");
-      break;
-    case 2:
-      strcpy(stat, "Heat On");
-      break;
-    case 3:
-      strcpy(stat, "Full Off");
-      break;
-    case 4:
-      strcpy(stat, "Exhaust");
-      break;
-    case 5:
-      strcpy(stat, "Force Fan");
-      break;
-    case 6:
-      sprintf(stat, "%s", "255.255.255.0");
-      break;
-    default:
-      strcpy(stat, "BROKEN");
-  }
-
-  display.setTextSize(2);
-  if (selected == 0) {
-    display.setTextSize(2);
-    display.println(stat);
-
-    display.setTextSize(1);
-    char highTempPrint[64];
-    if (mode == 2) {
-      sprintf(highTempPrint, "High %.0f%cF active", highTemp, (char)9);
-    } else {
-      sprintf(highTempPrint, "High %.0f%cF", highTemp, (char)9);
-    }
-    display.println(highTempPrint);
-
-    display.setTextSize(1);
-    char lowTempPrint[64];
-    if (mode == 1) {
-      sprintf(lowTempPrint, "Low  %.0f%cF active", lowTemp, (char)9);
-    } else {
-      sprintf(lowTempPrint, "Low  %.0f%cF", lowTemp, (char)9);
-    }
-    display.println(lowTempPrint);
-  } else if (selected == 1) {
-    display.setTextSize(1);
-    display.println(stat);
-
-    display.setTextSize(2);
-    char highTempPrint[64];
-    if (mode == 2) {
-      sprintf(highTempPrint, "High %.0f%cF", highTemp, (char)9);
-    } else {
-      sprintf(highTempPrint, "High %.0f%cF", highTemp, (char)9);
-    }
-    display.println(highTempPrint);
-
-    display.setTextSize(1);
-    char lowTempPrint[64];
-    if (mode == 1) {
-      sprintf(lowTempPrint, "Low  %.0f%cF active", lowTemp, (char)9);
-    } else {
-      sprintf(lowTempPrint, "Low  %.0f%cF", lowTemp, (char)9);
-    }
-    display.println(lowTempPrint);
-  } else if (selected == 2) {
-    display.setTextSize(1);
-    display.println(stat);
-
-    display.setTextSize(1);
-    char highTempPrint[64];
-    if (mode == 2) {
-      sprintf(highTempPrint, "High %.0f%cF active", highTemp, (char)9);
-    } else {
-      sprintf(highTempPrint, "High %.0f%cF", highTemp, (char)9);
-    }
-    display.println(highTempPrint);
-
-    display.setTextSize(2);
-    char lowTempPrint[64];
-    if (mode == 1) {
-      sprintf(lowTempPrint, "Low  %.0f%cF", lowTemp, (char)9);
-    } else {
-      sprintf(lowTempPrint, "Low  %.0f%cF", lowTemp, (char)9);
-    }
-    display.println(lowTempPrint);
-  }
-
-  display.setTextSize(1);
-  display.println(F("    Sensor Temps"));
-
-  // handles two vs 3 digit temps for left alignment
-  char buffer[256];
-  if (tmp1 >= 100.0) {
-    sprintf(buffer, " Room       %.1f%cF", tmp1, (char)9);
-  } else {
-    sprintf(buffer, " Room        %.1f%cF", tmp1, (char)9);
-  }
-  display.println(buffer);
-
-  // handles two vs 3 digit temps for left alignment
-  char buffer2[256];
-  if (tmp2 >= 100.0) {
-    sprintf(buffer2, " Lower Vent %.1f%cF", tmp2, (char)9);
-  } else {
-    sprintf(buffer2, " Lower Vent  %.1f%cF", tmp2, (char)9);
-  }
-  display.println(buffer2);
-
-  // handles two vs 3 digit temps for left alignment
-  char buffer3[256];
-  if (tmp3 >= 100.0) {
-    sprintf(buffer3, " Top Vent   %.1f%cF", tmp3, (char)9);
-  } else {
-    sprintf(buffer3, " Top Vent    %.1f%cF", tmp3, (char)9);
-  }
-  display.println(buffer3);
-
-  // State of the system (heating, cooling, standby, etc)
-
-  display.display();
-}
-
 
 unsigned long status_clear_timer;
 String Previous_Status_Text;
 
 void drawRX(String received) {
-  const char* toPrint = received.c_str(); 
+  // const char* toPrint = received.c_str(); 
   display.clearDisplay();
 
   display.setTextColor(SSD1306_WHITE);  // Draw white text
@@ -196,7 +91,7 @@ void drawRX(String received) {
 
 
   display.setTextSize(1);
-  display.print(F("Selected Camera: "));
+  display.print(F("Selected Cam: "));
   char sel_cam[8];
   //Serial.println(SELECTED_CAMERA);
   if (SELECTED_CAMERA == 1){
@@ -213,6 +108,22 @@ void drawRX(String received) {
   display.print(sel_cam);
 
 
+  //connected indicator
+  char connection_indicator[8];
+  if (eth_connected && udp_connected){
+    sprintf(connection_indicator, "   + +");
+  } else if (eth_connected){
+    sprintf(connection_indicator, "   + -");
+  }else if (udp_connected){
+    sprintf(connection_indicator, "   - +");
+  }else{
+    sprintf(connection_indicator, "   - -");
+  }
+  display.print(connection_indicator);
+
+
+
+
   //status display clear timer
   if (STATUS_TEXT != Previous_Status_Text){
     Previous_Status_Text = STATUS_TEXT;
@@ -223,14 +134,47 @@ void drawRX(String received) {
     STATUS_TEXT = "";
   }
 
-  display.setCursor(0, 48);
+  display.setCursor(0, 10);
   char buffer[256];
   sprintf(buffer, " %s", STATUS_TEXT.c_str());
-
   display.print(buffer);
 
+
+  // max speed values
+  display.setCursor(4, 37);
+  char max_title[32];
+  sprintf(max_title, "Max Speed Settings");
+  display.print(max_title);
+
+  display.setCursor(0, 46);
+  char max_values_x[32];
+  sprintf(max_values_x, "X:%d", cameras[SELECTED_CAMERA].max_pan);
+  display.print(max_values_x);
+
+  display.setCursor(35, 46);
+  char max_values_y[32];
+  sprintf(max_values_y, "Y:%d", cameras[SELECTED_CAMERA].max_tilt);
+  display.print(max_values_y);
+
+  display.setCursor(80, 46);
+  char max_values_z[32];
+  sprintf(max_values_z, "Zoom:%d", cameras[SELECTED_CAMERA].max_zoom);
+  display.print(max_values_z);
+
+  //underline selected max value - timeout after 5 seconds
+  if (selected_max == 1){
+    display.drawFastHLine(0, 54, 20, SSD1306_WHITE);
+  } else if (selected_max == 2){
+    display.drawFastHLine(35, 54, 20, SSD1306_WHITE);
+  } else if (selected_max == 3){
+    display.drawFastHLine(80, 54, 20, SSD1306_WHITE);
+  }
+    
+  
   
 
+
+  //joystick x, y, z values
   char joystick_x_print[32];
   sprintf(joystick_x_print, "X:%d", JOYSTICK_X);
 
@@ -257,7 +201,7 @@ void drawRX(String received) {
 void RecallPreset(int preset) {
   Serial.print("Recalling preset:");
   Serial.println(preset);
-  STATUS_TEXT = "Rec Preset " + (String)preset;
+  STATUS_TEXT = "Recalled Preset " + (String)preset;
 }
 
 void StorePreset(int preset) {
@@ -279,29 +223,63 @@ void Encoder1(bool direction) {
 }
 
 void Encoder1Press(bool state){
-  if (state){
-    STATUS_TEXT = "Encoder1 Pressed";
-  } else {
-    STATUS_TEXT = "Encoder1 Not Pressed";
-  }
+
+    UDP_Info Testing;
+    strcpy(Testing.IP_Address, "192.168.1.28");
+    Testing.Port = 52381;
+    Testing.Message = "UDP Message To Send";
+
+    xQueueSend(UDP_Queue, (void*)&Testing, (TickType_t) 0);
 }
 
 void Encoder2(bool direction) {
-  
-  if (direction){
-    Serial.println("Encoder2 In");
-    STATUS_TEXT = "Encoder2 In";
-  } else {
-    Serial.println("Encoder2 Out");
-    STATUS_TEXT = "Encoder2 Out";
+  if (selected_max == 1 && direction) {
+    cameras[SELECTED_CAMERA].max_pan += 1;
+  } else if (selected_max == 1 && !direction) {
+    cameras[SELECTED_CAMERA].max_pan -= 1;
+  } else if (selected_max == 2 && direction) {
+    cameras[SELECTED_CAMERA].max_tilt += 1;
+  } else if (selected_max == 2 && !direction) {
+    cameras[SELECTED_CAMERA].max_tilt -= 1;
+  } else if (selected_max == 3 && direction) {
+    cameras[SELECTED_CAMERA].max_zoom += 1;
+  } else if (selected_max == 3 && !direction) {
+    cameras[SELECTED_CAMERA].max_zoom -= 1;
   }
+
+  if (cameras[SELECTED_CAMERA].max_pan > 24){
+    cameras[SELECTED_CAMERA].max_pan = 24;
+  }
+  if (cameras[SELECTED_CAMERA].max_tilt > 23){
+    cameras[SELECTED_CAMERA].max_tilt = 23;
+  }
+  if (cameras[SELECTED_CAMERA].max_zoom > 7){
+    cameras[SELECTED_CAMERA].max_zoom = 7;
+  }
+
+  if (cameras[SELECTED_CAMERA].max_pan < 0){
+    cameras[SELECTED_CAMERA].max_pan = 0;
+  }
+  if (cameras[SELECTED_CAMERA].max_tilt < 0){
+    cameras[SELECTED_CAMERA].max_tilt = 0;
+  }
+  if (cameras[SELECTED_CAMERA].max_zoom < 0){
+    cameras[SELECTED_CAMERA].max_zoom = 0;
+  }
+
+  //to do add in storing to persistent storage
 }
 
 void Encoder2Press(bool state){
-  if (state){
-    STATUS_TEXT = "Encoder2 Pressed";
+  if (selected_max == 1){
+    selected_max = 2;
+  } else if (selected_max == 2) {
+    selected_max = 3;
+  }
+   else if (selected_max == 3) {
+    selected_max = 1;
   } else {
-    STATUS_TEXT = "Encoder2 Not Pressed";
+    selected_max = 1;
   }
 }
 
@@ -345,19 +323,20 @@ void EvaluateRXString(String RX) {
     } else if (command == "joystick_held") {
       STATUS_TEXT = "Joystick Held";
     }
-      else if (command == "zoom_toggle") {
+      else if (command == "encoder1_press") {
       Encoder1Press(value.toInt());
-    } else if (command == "zoom_up") {
+    } else if (command == "encoder1_up") {
       Encoder1(true);
-    } else if (command == "zoom_down") {
+    } else if (command == "encoder1_down") {
       Encoder1(false);
 
-    } else if (command == "focus_toggle") {
+    } else if (command == "encoder2_press") {
       Encoder2Press(value.toInt());
-    } else if (command == "focus_up") {
+    } else if (command == "encoder2_up") {
       Encoder2(true);
-    } else if (command == "focus_down") {
+    } else if (command == "encoder2_down") {
       Encoder2(false);
+
     } else if (command == "key_raw") {
       // raw keypad here
     } else if (command == "key_short") {
@@ -402,10 +381,148 @@ void EvaluateRXString(String RX) {
 }
 
 
+void Net_Event(WiFiEvent_t event){
+  switch (event) {
+    case SYSTEM_EVENT_ETH_START:
+      Serial.println("ETH Started");
+      //set eth hostname here
+      ETH.setHostname("Cool IR Shtuff");
+      break;
+    case SYSTEM_EVENT_ETH_CONNECTED:
+      Serial.println("ETH Connected");
+      break;
+    case SYSTEM_EVENT_ETH_GOT_IP:
+      Serial.print("ETH MAC: ");
+      Serial.print(ETH.macAddress());
+      Serial.print(", IPv4: ");
+      Serial.print(ETH.localIP());
+      if (ETH.fullDuplex()) {
+        Serial.print(", FULL_DUPLEX");
+      }
+      Serial.print(", ");
+      Serial.print(ETH.linkSpeed());
+      Serial.println("Mbps");
+      eth_connected = true;
+      // if (udp.connect(IPAddress(192,168,2,75), 48630)) {
+      //   udp_connected = true;
+      // }else {
+      //   udp_connected = false;
+      // }
+      
+      break;
+    case SYSTEM_EVENT_ETH_DISCONNECTED:
+      Serial.println("ETH Disconnected");
+      eth_connected = false;
+      udp_connected = false;
+      break;
+    case SYSTEM_EVENT_ETH_STOP:
+      Serial.println("ETH Stopped");
+      eth_connected = false;
+      udp_connected = false;
+      break;
+    default:
+      break;
+  }
+}
 
 
+
+#define up "\x01"
+#define down "\x02"
+#define left "\x01"
+#define right "\x02"
+#define stop "\x03"
+// expects a pan / x and tilt / y value for the intended speed\
+// pan range = -24 to 24 decimal
+// tilt range = -23 to 23 decimal 
+void EvaluatePanTilt(int x, int y, char* command){
+  const char ptzPrefix[] ="\x80\x01\x06\x01\x0a";
+  char *x_direction, *y_direction;
+  char *x_speed, *y_speed;
+
+  //limit incoming to available VISCA speed options
+  if (x > 24) { x = 24;}
+  if (x < -24) { x = -24;}
+  if (y > 23) { y = 23;}
+  if (y < -23) { y = -23;}
+
+  if (x == 0){
+    strcpy(x_direction, stop);
+    strcpy(x_speed, "\x01");
+  } else if (x < 0){
+    strcpy(x_direction, left);
+    sprintf(x_speed, "%d", abs(x));
+  } else if (x > 0){
+    strcpy(x_direction, right);
+    sprintf(x_speed, "%d", abs(x));
+  }
+
+    if (y == 0){
+    strcpy(y_direction, stop);
+    strcpy(y_speed, "\x01");
+  } else if (y < 0){
+    strcpy(y_direction, left);
+    sprintf(y_speed, "%d", abs(y));
+  } else if (y > 0){
+    strcpy(y_direction, right);
+    sprintf(y_speed, "%d", abs(y));
+  }
+
+  sprintf(command, "%s%s%s%s%s%s", ptzPrefix, x_speed, y_speed, x_direction, y_direction, "\xFF");
+}
+
+UDP_Info received_item;
+int lastCamTracking;
+void SendVISCACommands(void* pvParameters) {
+  while (1) {
+    // make sure to be connected to the proper camera
+    if (lastCamTracking != SELECTED_CAMERA) {
+      lastCamTracking = SELECTED_CAMERA;
+      if (udp.connect(camera_IPs[SELECTED_CAMERA],
+                      visca_port[SELECTED_CAMERA])) {
+        udp_connected = true;
+        udp.printf("Connecting to camera: %d\nIP:", SELECTED_CAMERA);
+        udp.println(camera_IPs[SELECTED_CAMERA]);
+
+        Serial.printf("Connecting to camera: %d\nIP:", SELECTED_CAMERA);
+        Serial.println(camera_IPs[SELECTED_CAMERA]);
+      } else {
+        udp_connected = false;
+      }
+    }
+    if (xQueueReceive(UDP_Queue, &received_item, (TickType_t)20) == pdTRUE) {
+      // if received something in the queue
+      if (!ETH.linkUp()) {
+        Serial.println("ethernet not connected");
+        eth_connected = false;
+        udp_connected = false;
+        break;
+      }
+
+      Serial.print(received_item.IP_Address);
+      Serial.print("ETH.linkUp()  ");
+      Serial.println(ETH.linkUp());
+
+    } else {
+    }
+    vTaskDelay(200);
+  }
+}
 
 void setup() {
+  // to do initialize camera IPs from persistent storage
+  cameras[1].ipAddress = IPAddress(192, 168, 1, 28);
+  cameras[2].ipAddress = IPAddress(192, 168, 1, 29);
+  cameras[3].ipAddress = IPAddress(192, 168, 1, 30);
+  cameras[4].ipAddress = IPAddress(192, 168, 1, 101);
+  cameras[1].visca_port = 52381;
+  cameras[2].visca_port = 52381;
+  cameras[3].visca_port = 52381;
+  cameras[4].visca_port = 52381;
+
+  //to do initialize max ptz values from persistent storage 
+  //*******(maybe just initialize the entire cameras struct??)*******
+
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
   Wire.setPins(OLED_SDA, OLED_SCL);
@@ -423,19 +540,45 @@ void setup() {
   StartupScreen();
 
 
-   IpAddressScreen();
+  IpAddressScreen();
+  WiFi.onEvent(Net_Event);
+  ETH.begin();
   delay(100);
-  Serial.print("Here Yo");
+  Serial.print("Local IP Address");
+  Serial.println(ETH.localIP());
+  delay(100);
 
+  //---------------------------------------------------------------------
+  //-------------------------- Create Integer Queue----------------------
+  UDP_Queue = xQueueCreate(16, sizeof (UDP_Info));
+  if (UDP_Queue == 0)  // Queue not created
+  {
+	  Serial.print("Unable to create Integer Queue\n");
+  }
+  else {
+    //if queue is created
+	  Serial.print("Integer Queue Created successfully\n");
+
+    xTaskCreate(
+      SendVISCACommands,                   /* Task function. */
+      "GetTemps",                 /* String with name of task. */
+      10000,                      /* Stack size in words. */
+      (void*)NULL, /* Parameter passed as input of the task */
+      2,                          /* Priority of the task. */
+      &SendUDP_Task);            /* Task handle. */
+
+
+  }
 }
+
+
 
 unsigned long displayTimer;
 
-
-void loop () {
+void loop() {
   String RXString;
   String toPrint;
-  if (Serial2.available()){
+  if (Serial2.available()) {
     RXString = Serial2.readStringUntil('\n');
     Serial.print("RX ");
     Serial.println(RXString);
@@ -446,7 +589,21 @@ void loop () {
     toPrint = RXString;
   }
 
-  if (millis() > displayTimer){
+  if (udp.connected()) {
+    udp_connected = true;
+  } else {
+    udp_connected = false;
+  }
+
+  if (ETH.linkUp()) {
+    eth_connected = true;
+
+  } else {
+    eth_connected = false;
+    udp_connected = false;
+  }
+
+  if (millis() > displayTimer) {
     displayTimer = millis() + 30;
     drawRX(toPrint);
   }

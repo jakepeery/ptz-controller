@@ -20,24 +20,24 @@
 #define keypad_press_debounce_time 20
 
 
-//Zoom encoder - set to pull up
-#define enc_zoom_press_pin 5
-#define enc_zoom_up_pin 18
-#define enc_zoom_dn_pin 19
+//encoder1 encoder - set to pull up
+#define enc_encoder1_press_pin 5
+#define enc_encoder1_up_pin 18
+#define enc_encoder1_dn_pin 19
 
-#define zoom_rate_multiplier 1
-#define zoom_max 255
-#define zoom_min 0
+#define encoder1_rate_multiplier 1
+#define encoder1_max 255
+#define encoder1_min 0
 
 
-//Focus encoder - set to pull up
-#define enc_focus_press_pin 21
-#define enc_focus_up_pin 22
-#define enc_focus_dn_pin 23
+//encoder2 encoder - set to pull up
+#define enc_encoder2_press_pin 21
+#define enc_encoder2_up_pin 22
+#define enc_encoder2_dn_pin 23
 
-#define focus_rate_multiplier 1
-#define focus_max 255
-#define focus_min 0
+#define encoder2_rate_multiplier 1
+#define encoder2_max 255
+#define encoder2_min 0
 
 
 //voltage/analog
@@ -54,6 +54,9 @@
 
 //time in ticks/ms to pace the joystick read/writes to serial
 #define joystickAnalogPaceTime 30 
+#define joystickMaxValue 100
+#define joystickCalibrationCenter 1800
+#define joystickCenterRange 200
 
 
 

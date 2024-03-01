@@ -26,8 +26,8 @@ DebouncedButton keypad_col2;
 DebouncedButton keypad_col3;
 DebouncedButton keypad_col4;
 
-DebouncedButton zoom_press;
-DebouncedButton focus_press;
+DebouncedButton encoder1_press;
+DebouncedButton encoder2_press;
 DebouncedButton joystick_press;
 
 String keypadLayout[4][4] = {{"1", "2", "3", "A"},
@@ -127,21 +127,22 @@ void JoystickHeld(String joystick, unsigned long time){
 
 
 
+
 int EvaluateAnalog(int value){
   int rtnValue = 0;
-  value = value - 1800;
-  if (value > -300 && value < 300){
+  value = value - joystickCalibrationCenter;
+  if (value > -1 * joystickCenterRange && value < joystickCenterRange){ //at home/center"
     rtnValue = 0;
-  }  else if (value < -1800){
-    rtnValue = -20;
+  } else if (value < (-1 * joystickCalibrationCenter) + 1) { //all the way down
+    rtnValue = -1 * joystickMaxValue;
 
-  } else if (value > 2295){
-    rtnValue = 20;
-  } else if (value <= -200){
-    rtnValue = value / 90;
+  } else if (value > 4094 - joystickCalibrationCenter){ //all the way up
+    rtnValue = joystickMaxValue;
+  } else if (value <= -1 * joystickCenterRange){ //below home
+    rtnValue = value / (joystickCalibrationCenter / joystickMaxValue);
 
-  } else if (value >= 200){
-    rtnValue = value / 114;
+  } else if (value >= joystickCenterRange){ //above home
+    rtnValue = value / ((4094 - joystickCalibrationCenter) / joystickMaxValue);
   }
   return rtnValue;
 }
@@ -193,16 +194,16 @@ void setup() {
 
 
   //---------------------------------------------------------------------------------------------
-  //---------------------------------------Zoom Encoder------------------------------------------------------
-  Serial.println("Setting up zoom encoder pins");
-  pinMode(enc_zoom_press_pin, INPUT_PULLUP);
-  zoom_press.PIN = enc_zoom_press_pin;
-  zoom_press.Delay = debaounce_delay;
+  //---------------------------------------encoder1 Encoder------------------------------------------------------
+  Serial.println("Setting up encoder1 encoder pins");
+  pinMode(enc_encoder1_press_pin, INPUT_PULLUP);
+  encoder1_press.PIN = enc_encoder1_press_pin;
+  encoder1_press.Delay = debaounce_delay;
 
-  pinMode(enc_zoom_up_pin, INPUT_PULLUP);
-  pinMode(enc_zoom_dn_pin, INPUT_PULLUP);
+  pinMode(enc_encoder1_up_pin, INPUT_PULLUP);
+  pinMode(enc_encoder1_dn_pin, INPUT_PULLUP);
 
-  //---------------------------------------Zoom Encoder------------------------------------------------------
+  //---------------------------------------encoder1 Encoder------------------------------------------------------
   //---------------------------------------------------------------------------------------------
 
 
@@ -211,16 +212,16 @@ void setup() {
 
 
   //---------------------------------------------------------------------------------------------
-  //---------------------------------------Focus Encoder------------------------------------------------------
-  Serial.println("Setting up focus encoder pins");
-  pinMode(enc_focus_press_pin, INPUT_PULLUP);
-  focus_press.PIN = enc_focus_press_pin;
-  focus_press.Delay = debaounce_delay;
+  //---------------------------------------encoder2 Encoder------------------------------------------------------
+  Serial.println("Setting up encoder2 encoder pins");
+  pinMode(enc_encoder2_press_pin, INPUT_PULLUP);
+  encoder2_press.PIN = enc_encoder2_press_pin;
+  encoder2_press.Delay = debaounce_delay;
 
-  pinMode(enc_focus_up_pin, INPUT_PULLUP);
-  pinMode(enc_focus_dn_pin, INPUT_PULLUP);
+  pinMode(enc_encoder2_up_pin, INPUT_PULLUP);
+  pinMode(enc_encoder2_dn_pin, INPUT_PULLUP);
 
-  //---------------------------------------Focus Encoder------------------------------------------------------
+  //---------------------------------------encoder2 Encoder------------------------------------------------------
   //---------------------------------------------------------------------------------------------
 
 
@@ -270,15 +271,15 @@ unsigned long joystickPressedTime;
 bool joystickLastState = false;
 bool joystickHeldEvent = false;
 
-bool zoom_encoder_state = false;
-int zoom_value = 128;
-bool zoom_button_state;
-bool zoom_toggle = false;
+bool encoder1_encoder_state = false;
+int encoder1_value = 128;
+bool encoder1_button_state;
+bool encoder1_toggle = false;
 
-bool focus_encoder_state = false;
-int focus_value = 128;
-bool focus_button_state;
-bool focus_toggle = false;
+bool encoder2_encoder_state = false;
+int encoder2_value = 128;
+bool encoder2_button_state;
+bool encoder2_toggle = false;
 
 unsigned long joystickPacer;
 
@@ -318,93 +319,95 @@ void loop() {
   //----------------------------------Keypad Events-------------------------
   //------------------------------------------------------------------------
 
-  // Zoom encoder
-  bool zoom_pressed = !zoom_press.buttonDebounce();
-  if (zoom_pressed != zoom_button_state && zoom_pressed) {
-    if (zoom_toggle) {
-      zoom_toggle = false;
-      Serial.printf("zoom_toggle = %d\n", zoom_toggle);
+  // encoder1 encoder
+  bool encoder1_pressed = !encoder1_press.buttonDebounce();
+  if (encoder1_pressed != encoder1_button_state && encoder1_pressed) {
+    Serial2.printf("encoder1_press:1\r\n");
+    if (encoder1_toggle) {
+      encoder1_toggle = false;
+      Serial.printf("encoder1_toggle = %d\n", encoder1_toggle);
     } else {
-      zoom_toggle = true;
-      Serial.printf("zoom_toggle = %d\n", zoom_toggle);
+      encoder1_toggle = true;
+      Serial.printf("encoder1_toggle = %d\n", encoder1_toggle);
     }
-    Serial2.printf("zoom_toggle:%d\r\n", zoom_toggle);
+
   }
-  zoom_button_state = zoom_pressed;
+  encoder1_button_state = encoder1_pressed;
 
 
-  bool zoom_up = !digitalRead(enc_zoom_up_pin);
-  bool zoom_dn = !digitalRead(enc_zoom_dn_pin);
-  if ((zoom_up != zoom_encoder_state) && zoom_up) {
-    // Serial.printf("up: %d    down: %d\n", zoom_up, zoom_dn);
-    if (zoom_dn != zoom_up) {
-      Serial.printf("ZOOM UP. value start: %d\n", zoom_value);
-      if (zoom_value < zoom_max) {
-        zoom_value = zoom_value + 1 * zoom_rate_multiplier;
+  bool encoder1_up = !digitalRead(enc_encoder1_up_pin);
+  bool encoder1_dn = !digitalRead(enc_encoder1_dn_pin);
+  if ((encoder1_up != encoder1_encoder_state) && encoder1_up) {
+    // Serial.printf("up: %d    down: %d\n", encoder1_up, encoder1_dn);
+    if (encoder1_dn != encoder1_up) {
+      Serial.printf("encoder1 UP. value start: %d\n", encoder1_value);
+      if (encoder1_value < encoder1_max) {
+        encoder1_value = encoder1_value + 1 * encoder1_rate_multiplier;
         
       } else {
-        zoom_value = zoom_max;
+        encoder1_value = encoder1_max;
       }
-      Serial.printf("zoom up. value end: %d\n", zoom_value);
-      //Serial2.printf("zoom_value:%d\r\n", zoom_value);
-      Serial2.printf("zoom_up:1\r\n");
+      Serial.printf("encoder1 up. value end: %d\n", encoder1_value);
+      //Serial2.printf("encoder1_value:%d\r\n", encoder1_value);
+      Serial2.printf("encoder1_up:1\r\n");
 
     } else {
-      Serial.printf("ZOOM DOWN. value start: %d\n", zoom_value);
-      if (zoom_value > zoom_min) {
-        zoom_value = zoom_value - 1 * zoom_rate_multiplier;
+      Serial.printf("encoder1 DOWN. value start: %d\n", encoder1_value);
+      if (encoder1_value > encoder1_min) {
+        encoder1_value = encoder1_value - 1 * encoder1_rate_multiplier;
       } else {
-        zoom_value = zoom_min;
+        encoder1_value = encoder1_min;
       }
-      Serial.printf("zoom down. value end: %d\n", zoom_value);
-      //Serial2.printf("zoom_value:%d\r\n", zoom_value);
-      Serial2.printf("zoom_down:1\r\n");
+      Serial.printf("encoder1 down. value end: %d\n", encoder1_value);
+      //Serial2.printf("encoder1_value:%d\r\n", encoder1_value);
+      Serial2.printf("encoder1_down:1\r\n");
     }
   }
-  zoom_encoder_state = zoom_up;
+  encoder1_encoder_state = encoder1_up;
 
-  // Focus encoder
-  bool focus_pressed = !focus_press.buttonDebounce();
-  if (focus_pressed != focus_button_state && focus_pressed) {
-    if (focus_toggle) {
-      focus_toggle = false;
-      Serial.printf("focus_toggle = %d\n", focus_toggle);
+  // encoder2 encoder
+  bool encoder2_pressed = !encoder2_press.buttonDebounce();
+  if (encoder2_pressed != encoder2_button_state && encoder2_pressed) {
+    Serial2.printf("encoder2_press:1\r\n");
+    if (encoder2_toggle) {
+      encoder2_toggle = false;
+      Serial.printf("encoder2_toggle = %d\n", encoder2_toggle);
     } else {
-      focus_toggle = true;
-      Serial.printf("focus_toggle = %d\n", focus_toggle);
+      encoder2_toggle = true;
+      Serial.printf("encoder2_toggle = %d\n", encoder2_toggle);
     }
-    Serial2.printf("focus_toggle:%d\r\n", focus_toggle);
-  }
-  focus_button_state = focus_pressed;
-
-
-  bool focus_up = !digitalRead(enc_focus_up_pin);
-  bool focus_dn = !digitalRead(enc_focus_dn_pin);
-  if ((focus_up != focus_encoder_state) && focus_up) {
     
-    if (focus_dn != focus_up) {
-      Serial.printf("FOCUS UP. value start: %d\n", focus_value);
-      if (focus_value < focus_max) {
-        focus_value = focus_value + 1 * focus_rate_multiplier;
+  }
+  encoder2_button_state = encoder2_pressed;
+
+
+  bool encoder2_up = !digitalRead(enc_encoder2_up_pin);
+  bool encoder2_dn = !digitalRead(enc_encoder2_dn_pin);
+  if ((encoder2_up != encoder2_encoder_state) && encoder2_up) {
+    
+    if (encoder2_dn != encoder2_up) {
+      Serial.printf("encoder2 UP. value start: %d\n", encoder2_value);
+      if (encoder2_value < encoder2_max) {
+        encoder2_value = encoder2_value + 1 * encoder2_rate_multiplier;
       } else {
-        focus_value = focus_max;
+        encoder2_value = encoder2_max;
       }
-      Serial.printf("focus up. value end: %d\n", focus_value);
-      //Serial2.printf("focus_value:%d\r\n", focus_value);
-      Serial2.printf("focus_up:1\r\n");
+      Serial.printf("encoder2 up. value end: %d\n", encoder2_value);
+      //Serial2.printf("encoder2_value:%d\r\n", encoder2_value);
+      Serial2.printf("encoder2_up:1\r\n");
     } else {
-      Serial.printf("FOCUS DOWN. value start: %d\n", focus_value);
-      if (focus_value > focus_min) {
-        focus_value = focus_value - 1 * focus_rate_multiplier;
+      Serial.printf("encoder2 DOWN. value start: %d\n", encoder2_value);
+      if (encoder2_value > encoder2_min) {
+        encoder2_value = encoder2_value - 1 * encoder2_rate_multiplier;
       } else {
-        focus_value = focus_min;
+        encoder2_value = encoder2_min;
       }
-      Serial.printf("focus down. value end: %d\n", focus_value);
-      //Serial2.printf("focus_value:%d\r\n", focus_value);
-      Serial2.printf("focus_down:1\r\n");
+      Serial.printf("encoder2 down. value end: %d\n", encoder2_value);
+      //Serial2.printf("encoder2_value:%d\r\n", encoder2_value);
+      Serial2.printf("encoder2_down:1\r\n");
     }
   }
-  focus_encoder_state = focus_up;
+  encoder2_encoder_state = encoder2_up;
 
   // Joystick #1 - cheap style
   bool joystick_pressed = !joystick_press.buttonDebounce();
