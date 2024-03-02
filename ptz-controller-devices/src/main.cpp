@@ -142,10 +142,10 @@ int EvaluateAnalog(int value){
     rtnValue = joystickMaxValue;
     //Serial.println("At full");
   } else if (value <= -1 * joystickCenterRange){ //below home
-    rtnValue = value / (joystickCalibrationCenter / joystickMaxValue);
+    rtnValue = (value + joystickCenterRange) / (joystickCalibrationCenter / joystickMaxValue);
     //Serial.println("Below Home");
   } else if (value >= joystickCenterRange){ //above home
-    rtnValue = value / ((4094 - joystickCalibrationCenter) / joystickMaxValue);
+    rtnValue = (value - joystickCenterRange) / ((4094 - joystickCalibrationCenter) / joystickMaxValue);
     //Serial.println("Above Home");
   }
   return rtnValue;
