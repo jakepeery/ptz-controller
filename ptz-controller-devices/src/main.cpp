@@ -131,18 +131,22 @@ void JoystickHeld(String joystick, unsigned long time){
 int EvaluateAnalog(int value){
   int rtnValue = 0;
   value = value - joystickCalibrationCenter;
+  //Serial.println(value);
   if (value > -1 * joystickCenterRange && value < joystickCenterRange){ //at home/center"
     rtnValue = 0;
+    //Serial.println("At Home/Center");
   } else if (value < (-1 * joystickCalibrationCenter) + 1) { //all the way down
     rtnValue = -1 * joystickMaxValue;
-
+    //Serial.println("At 0");
   } else if (value > 4094 - joystickCalibrationCenter){ //all the way up
     rtnValue = joystickMaxValue;
+    //Serial.println("At full");
   } else if (value <= -1 * joystickCenterRange){ //below home
     rtnValue = value / (joystickCalibrationCenter / joystickMaxValue);
-
+    //Serial.println("Below Home");
   } else if (value >= joystickCenterRange){ //above home
     rtnValue = value / ((4094 - joystickCalibrationCenter) / joystickMaxValue);
+    //Serial.println("Above Home");
   }
   return rtnValue;
 }
@@ -154,9 +158,9 @@ void setup() {
   Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
   delay(1000);
   printHardwareInfo();
-  Serial2.println("Starting Controls ESP32");
+  //Serial2.println("Starting Controls ESP32");
   delay(1000);
-  Serial2.println("Starting Controls ESP32");
+  //Serial2.println("Starting Controls ESP32");
   
   const int debaounce_delay = 50;
 
@@ -447,18 +451,7 @@ void loop() {
     int joystick_y = analogRead(joystick_y_pin);
     int joystick_twist = analogRead(joystick_twist_pin);
 
-    // //shift the values
-    // joystick_x = joystick_x - (4095/2);
-    // joystick_y = joystick_y - (4095/2);
-    // joystick_twist = joystick_twist - (4095/2);
-
-    // //range the values
-    // int high = 10;
-
-    // joystick_x = (int)((float)joystick_x/(4095.0/2) * high);
-    // joystick_y = (int)((float)joystick_y/(4095.0/2) * high);
-    // joystick_twist = (int)((float)joystick_twist/(4095.0/2) * high);
-    Serial.printf("X:%d, Y:%d, T:%d\n", joystick_x,  joystick_y, joystick_twist);
+    //Serial.printf("X:%d, Y:%d, T:%d\n", joystick_x,  joystick_y, joystick_twist);
 
 
     joystick_x = EvaluateAnalog(joystick_x);

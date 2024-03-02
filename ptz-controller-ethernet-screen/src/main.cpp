@@ -1,243 +1,20 @@
 #include "main.h"
+#include "VISCA_Evaluators.h"
+#include "display.h"
 
-
-
-Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
-
-static int JOYSTICK_X, JOYSTICK_Y, JOYSTICK_TWIST;
-static int SELECTED_CAMERA = 1;
-
-
-static String STATUS_TEXT;
-
-static TaskHandle_t SendUDP_Task;
-
-static bool eth_connected = false;
-static bool udp_connected = false;
-
-AsyncUDP udp;
-
-
-struct CameraProperties{
-  int max_pan = 24;
-  int max_tilt = 23;
-  int max_zoom = 7;
-  IPAddress ipAddress;
-  int visca_port;
-};
 
 CameraProperties cameras[5];
-
+//AsyncUDP udp;
+WiFiUDP udp;
+//UDP udp;
 int selected_max;
+QueueHandle_t UDP_Queue;
+int JOYSTICK_X, JOYSTICK_Y, JOYSTICK_TWIST;
+int SELECTED_CAMERA = 1;
+String STATUS_TEXT;
+bool eth_connected = false;
+bool udp_connected = false;
 
-
-
-
-#define up char(1)    //"\x01"
-#define down char(2)  //"\x02"
-#define left char(1)  //"\x01"
-#define right char(2) //"\x02"
-#define stop char(3)  //"\x03"
-// expects a pan / x and tilt / y value for the intended speed\
-// pan range = -24 to 24 decimal
-// tilt range = -23 to 23 decimal 
-void EvaluatePanTilt(int x, int y, String *command){
-  char ptzPrefix[] ="\x81\x01\x06\x01";
-  char x_direction, y_direction;
-  char x_speed, y_speed;
-
-  //limit incoming to available VISCA speed options
-  if (x > 24) { x = 24;}
-  if (x < -24) { x = -24;}
-  if (y > 23) { y = 23;}
-  if (y < -23) { y = -23;}
-  if (x == 0){
-      x_direction = stop;
-      x_speed = char(1);
-  } else if (x < 0){
-      x_direction = left;
-      x_speed = char(abs(x));
-  } else if (x > 0){
-      x_direction = right;
-      x_speed = char(abs(x));
-  }
-
-    if (y == 0){
-      y_direction = stop;
-      y_speed = char(1); 
-  } else if (y < 0){
-      y_direction = left;
-      y_speed = char(abs(y));
-  } else if (y > 0){
-      y_direction = right;
-      y_speed = char(abs(y));
-    }
-  //Serial.printf("%s%c%c%c%c%c", ptzPrefix, x_speed, y_speed, x_direction, y_direction, char(255));
-  char temp[24];
-  sprintf(temp, "%s%c%c%c%c%c", ptzPrefix, x_speed, y_speed, x_direction, y_direction, char(255));
-
-  *command = String(temp);
-}
-
-
-
-void StartupScreen() {
-  char stat[64];
-  display.clearDisplay();
-
-  display.setTextColor(SSD1306_WHITE);  // Draw white text
-  display.setCursor(0, 0);              // Start at top-left corner
-  display.cp437(true);  // Use full 256 char 'Code Page 437' font
-
-  display.setTextSize(2);
-  sprintf(stat, "%s", "255.255.255.0");
-  display.println("BOOTING");
-  display.println("Please");
-  display.println("Wait..");
-  display.display();
-}
-
-void IpAddressScreen() {
-  char stat[64];
-  char mode[64];
-  display.clearDisplay();
-
-  display.setTextColor(SSD1306_WHITE);  // Draw white text
-  display.setCursor(0, 0);              // Start at top-left corner
-  display.cp437(true);  // Use full 256 char 'Code Page 437' font
-
-  display.setTextSize(2);
-  sprintf(stat, "%s", "255.255.255.0");
-  sprintf(mode, "%s", "255.255.255.0");
-  display.println("Wifi");
-  display.setTextSize(1);
-  display.print("IP Addr ");
-  display.println(stat);
-  display.println("");
-  display.print("Wifi Mode ");
-  display.println("Busted");
-  display.display();
-}
-
-
-unsigned long status_clear_timer;
-String Previous_Status_Text;
-
-void drawRX(String received) {
-  // const char* toPrint = received.c_str(); 
-  display.clearDisplay();
-
-  display.setTextColor(SSD1306_WHITE);  // Draw white text
-  display.setCursor(0, 0);              // Start at top-left corner
-  display.cp437(true);  // Use full 256 char 'Code Page 437' font
-
-
-  display.setTextSize(1);
-  display.print(F("Selected Cam: "));
-  char sel_cam[8];
-  //Serial.println(SELECTED_CAMERA);
-  if (SELECTED_CAMERA == 1){
-    sprintf(sel_cam, "A");
-  } else if (SELECTED_CAMERA == 2){
-    sprintf(sel_cam, "B");
-  } else if (SELECTED_CAMERA == 3){
-    sprintf(sel_cam, "C");
-  } else if (SELECTED_CAMERA == 4){
-    sprintf(sel_cam, "D");
-  } else {
-    sprintf(sel_cam, "N/A");
-  }
-  display.print(sel_cam);
-
-
-  //connected indicator
-  char connection_indicator[8];
-  if (eth_connected && udp_connected){
-    sprintf(connection_indicator, "   + +");
-  } else if (eth_connected){
-    sprintf(connection_indicator, "   + -");
-  }else if (udp_connected){
-    sprintf(connection_indicator, "   - +");
-  }else{
-    sprintf(connection_indicator, "   - -");
-  }
-  display.print(connection_indicator);
-
-
-
-
-  //status display clear timer
-  if (STATUS_TEXT != Previous_Status_Text){
-    Previous_Status_Text = STATUS_TEXT;
-    status_clear_timer = millis() + 3000;
-  }
-
-  if (status_clear_timer <= millis()){
-    STATUS_TEXT = "";
-  }
-
-  display.setCursor(0, 10);
-  char buffer[256];
-  sprintf(buffer, " %s", STATUS_TEXT.c_str());
-  display.print(buffer);
-
-
-  // max speed values
-  display.setCursor(4, 37);
-  char max_title[32];
-  sprintf(max_title, "Max Speed Settings");
-  display.print(max_title);
-
-  display.setCursor(0, 46);
-  char max_values_x[32];
-  sprintf(max_values_x, "X:%d", cameras[SELECTED_CAMERA].max_pan);
-  display.print(max_values_x);
-
-  display.setCursor(35, 46);
-  char max_values_y[32];
-  sprintf(max_values_y, "Y:%d", cameras[SELECTED_CAMERA].max_tilt);
-  display.print(max_values_y);
-
-  display.setCursor(80, 46);
-  char max_values_z[32];
-  sprintf(max_values_z, "Zoom:%d", cameras[SELECTED_CAMERA].max_zoom);
-  display.print(max_values_z);
-
-  //underline selected max value - timeout after 5 seconds
-  if (selected_max == 1){
-    display.drawFastHLine(0, 54, 20, SSD1306_WHITE);
-  } else if (selected_max == 2){
-    display.drawFastHLine(35, 54, 20, SSD1306_WHITE);
-  } else if (selected_max == 3){
-    display.drawFastHLine(80, 54, 20, SSD1306_WHITE);
-  }
-    
-  
-  
-
-
-  //joystick x, y, z values
-  char joystick_x_print[32];
-  sprintf(joystick_x_print, "X:%d", JOYSTICK_X);
-
-  char joystick_y_print[32];
-  sprintf(joystick_y_print, "Y:%d", JOYSTICK_Y);
-
-  char joystick_twist_print[32];
-  sprintf(joystick_twist_print, "Zoom:%d", JOYSTICK_TWIST);
-  
-  display.setCursor(0, 57);
-  display.print(joystick_x_print);
-
-  display.setCursor(35, 57);
-  display.print(joystick_y_print);
-
-  display.setCursor(80, 57);
-  display.print(joystick_twist_print);
-
-
-  display.display();
-}
 
 
 void RecallPreset(int preset) {
@@ -254,7 +31,6 @@ void StorePreset(int preset) {
 
 
 void Encoder1(bool direction) {
-  
   if (direction){
     Serial.println("Encoder1 In");
     STATUS_TEXT = "Encoder1 In";
@@ -265,13 +41,12 @@ void Encoder1(bool direction) {
 }
 
 void Encoder1Press(bool state){
+  UDP_Info Testing;
+  Testing.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
+  Testing.Port = cameras[SELECTED_CAMERA].visca_port;
+  Testing.Message = "UDP Message To Send";
 
-    UDP_Info Testing;
-    Testing.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
-    Testing.Port = cameras[SELECTED_CAMERA].visca_port;
-    Testing.Message = "UDP Message To Send";
-
-    xQueueSend(UDP_Queue, (void*)&Testing, (TickType_t) 0);
+  xQueueSend(UDP_Queue, (void*)&Testing, (TickType_t) 0);
 }
 
 void Encoder2(bool direction) {
@@ -289,14 +64,14 @@ void Encoder2(bool direction) {
     cameras[SELECTED_CAMERA].max_zoom -= 1;
   }
 
-  if (cameras[SELECTED_CAMERA].max_pan > 24){
-    cameras[SELECTED_CAMERA].max_pan = 24;
+  if (cameras[SELECTED_CAMERA].max_pan > MAX_PAN){
+    cameras[SELECTED_CAMERA].max_pan = MAX_PAN;
   }
-  if (cameras[SELECTED_CAMERA].max_tilt > 23){
-    cameras[SELECTED_CAMERA].max_tilt = 23;
+  if (cameras[SELECTED_CAMERA].max_tilt > MAX_TILT){
+    cameras[SELECTED_CAMERA].max_tilt = MAX_TILT;
   }
-  if (cameras[SELECTED_CAMERA].max_zoom > 7){
-    cameras[SELECTED_CAMERA].max_zoom = 7;
+  if (cameras[SELECTED_CAMERA].max_zoom > MAX_ZOOM){
+    cameras[SELECTED_CAMERA].max_zoom = MAX_ZOOM;
   }
 
   if (cameras[SELECTED_CAMERA].max_pan < 1){
@@ -330,8 +105,13 @@ void Encoder2Press(bool state){
 void EvaluateRXString(String RX) {
   static int newJoystickX;
   static int newJoystickY;
+  static int newJoystickTwist;
   const char* rx_chars = RX.c_str();
   // Serial.printf("Evaluating RX: %s\n", rx_chars);
+
+  UDP_Info ToSend;
+  ToSend.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
+  ToSend.Port = cameras[SELECTED_CAMERA].visca_port;
 
   String command, value;
 
@@ -346,32 +126,31 @@ void EvaluateRXString(String RX) {
     split = value.indexOf(String("\r"));
     value = value.substring(0, split); //remove the \r\n
 
-    
-
     // event triggers
-    
     if (command == "joystick_x") {
       int temp_x = value.toInt();
       newJoystickX = (int)((float)temp_x *
                            (float)(cameras[SELECTED_CAMERA].max_pan / 100.0));
-      // newJoystickX = temp_x * int(float(cameras[SELECTED_CAMERA].max_pan) / 100.0);
 
     } else if (command == "joystick_y") {
       int temp_y = value.toInt();
       newJoystickY = (int)((float)temp_y *
                            (float)(cameras[SELECTED_CAMERA].max_tilt / 100.0));
-      // newJoystickY = temp_y * int(float(cameras[SELECTED_CAMERA].max_tilt) / 100.0);
 
     } else if (command == "joystick_twist") {
       int temp_twist = value.toInt();
-      JOYSTICK_TWIST =
+      newJoystickTwist =
           (int)((float)temp_twist *
                 (float)(cameras[SELECTED_CAMERA].max_zoom / 100.0));
 
     } else if (command == "joystick_raw") {
       // STATUS_TEXT = command;
     } else if (command == "joystick_short_released") {
-      STATUS_TEXT = "Joystick Short";
+      STATUS_TEXT = "One Push Focus";
+      char one_push_focus_cmd[256];
+      OnePushFocus(one_push_focus_cmd);
+      ToSend.Message = one_push_focus_cmd;
+      xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
     } else if (command == "joystick_long_released") {
       // STATUS_TEXT = command;
     } else if (command == "joystick_held") {
@@ -432,24 +211,31 @@ void EvaluateRXString(String RX) {
     return;
   }
 
-
+  
+  static char udpCommand[24];
   if (JOYSTICK_X != newJoystickX || JOYSTICK_Y != newJoystickY){
     JOYSTICK_X = newJoystickX;
     JOYSTICK_Y = newJoystickY;
-    // Serial.print("JoystickX: ");
-    // Serial.println(JOYSTICK_X);
-    // Serial.print("JoystickY: ");
-    // Serial.println(JOYSTICK_Y);
-
-    String pan_tilt_cmd;
-    EvaluatePanTilt(JOYSTICK_X, JOYSTICK_Y, &pan_tilt_cmd);
-    UDP_Info ToSend;
-    ToSend.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
-    ToSend.Port = cameras[SELECTED_CAMERA].visca_port;
-    ToSend.Message = pan_tilt_cmd;
-      
+    EvaluatePanTilt(JOYSTICK_X, JOYSTICK_Y, udpCommand);
+    ToSend.Message = udpCommand;
     xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
   }
+
+  if (JOYSTICK_TWIST != newJoystickTwist){
+    JOYSTICK_TWIST = newJoystickTwist;
+    if (JOYSTICK_TWIST == 0){
+      ToSend.Message = "\x81\x01\x04\x07\x00\xFF";
+      xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
+    } else {
+      EvaluateZoom(JOYSTICK_TWIST, udpCommand);
+      ToSend.Message = udpCommand;
+      xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
+    }
+    
+    // Serial.print("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF");
+    // Serial.print(ToSend.Message);
+  }
+
 }
 
 
@@ -475,11 +261,6 @@ void Net_Event(WiFiEvent_t event){
       Serial.print(ETH.linkSpeed());
       Serial.println("Mbps");
       eth_connected = true;
-      // if (udp.connect(IPAddress(192,168,2,75), 48630)) {
-      //   udp_connected = true;
-      // }else {
-      //   udp_connected = false;
-      // }
       
       break;
     case SYSTEM_EVENT_ETH_DISCONNECTED:
@@ -501,25 +282,11 @@ void Net_Event(WiFiEvent_t event){
 
 
 
-UDP_Info received_item;
-int lastCamTracking;
-void SendVISCACommands(void* pvParameters) {
-  while (1) {
-    // make sure to be connected to the proper camera
-    if (lastCamTracking != SELECTED_CAMERA) {
-      lastCamTracking = SELECTED_CAMERA;
-      if (udp.connect(cameras[SELECTED_CAMERA].ipAddress,
-                      cameras[SELECTED_CAMERA].visca_port)) {
-        udp_connected = true;
-        udp.printf("Connecting to camera: %d\nIP:", SELECTED_CAMERA);
-        udp.println(cameras[SELECTED_CAMERA].ipAddress);
 
-        Serial.printf("Connecting to camera: %d\nIP:", SELECTED_CAMERA);
-        Serial.println(cameras[SELECTED_CAMERA].ipAddress);
-      } else {
-        udp_connected = false;
-      }
-    }
+void SendVISCACommands(void* pvParameters) {
+  UDP_Info received_item;
+  int lastCamTracking;
+  while (1) {
     if (xQueueReceive(UDP_Queue, &received_item, (TickType_t)20) == pdTRUE) {
       // if received something in the queue
       if (!ETH.linkUp()) {
@@ -528,14 +295,23 @@ void SendVISCACommands(void* pvParameters) {
         udp_connected = false;
         break;
       }
+      //Serial.print("UDP Sending: ");
+      //Serial.println(received_item.Message);
 
-      // Serial.print(received_item.IP_Address);
-      // Serial.print("  Message:");
-      // Serial.println(received_item.Message);
-      udp.print(received_item.Message);
-
+      // have to loop and send packets due to VISCA using \x00 in strings
+      // and c using null as the termination char for char arrays and strings
+      udp.beginPacket(cameras[SELECTED_CAMERA].ipAddress, cameras[SELECTED_CAMERA].visca_port);
+      for (int i=0; i<24; i++){
+        Serial.printf("$%x ",received_item.Message[i]);
+        udp.printf("%c", received_item.Message[i]);
+        if (received_item.Message[i] == char(255)){
+          break;
+        }
+      }
+      udp.endPacket();
+      //Serial.println("\nEnd UDP TX");
     }
-    vTaskDelay(2);
+    vTaskDelay(50);
   }
 }
 
@@ -557,47 +333,36 @@ void setup() {
   Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
   Wire.setPins(OLED_SDA, OLED_SCL);
 
-  //-----------------------------------------------------------OLED
-  // Setup------------------------------------
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDRESS)) {
-    Serial.println(F("SSD1306 allocation failed"));
-    for (;;)
-      ;  // Don't proceed, loop forever
-  }
-  delay(500);
-  display.clearDisplay();
+  //-------------------------------OLED----------------------------------
+  DisplayStartup();
   Serial.println("Booting Yo");
   StartupScreen();
-
-
-  IpAddressScreen();
+  
   WiFi.onEvent(Net_Event);
   ETH.begin();
   delay(100);
+  IpAddressScreen(ETH.localIP(), ETH.subnetMask());
   Serial.print("Local IP Address");
   Serial.println(ETH.localIP());
-  delay(100);
+  delay(2000);
 
   //---------------------------------------------------------------------
   //-------------------------- Create Integer Queue----------------------
   UDP_Queue = xQueueCreate(16, sizeof (UDP_Info));
-  if (UDP_Queue == 0)  // Queue not created
-  {
+  if (UDP_Queue == 0) {
+    // Queue not created
 	  Serial.print("Unable to create Integer Queue\n");
-  }
-  else {
+  } else {
     //if queue is created
 	  Serial.print("Integer Queue Created successfully\n");
 
     xTaskCreate(
-      SendVISCACommands,                   /* Task function. */
-      "GetTemps",                 /* String with name of task. */
-      10000,                      /* Stack size in words. */
-      (void*)NULL, /* Parameter passed as input of the task */
-      2,                          /* Priority of the task. */
-      &SendUDP_Task);            /* Task handle. */
-
-
+      SendVISCACommands,  /* Task function. */
+      "GetTemps",         /* String with name of task. */
+      10000,              /* Stack size in words. */
+      (void*)NULL,        /* Parameter passed as input of the task */
+      2,                  /* Priority of the task. */
+      &SendUDP_Task);     /* Task handle. */
   }
 }
 
@@ -619,11 +384,11 @@ void loop() {
     toPrint = RXString;
   }
 
-  if (udp.connected()) {
-    udp_connected = true;
-  } else {
-    udp_connected = false;
-  }
+  // if (udp.connected()) {
+  //   udp_connected = true;
+  // } else {
+  //   udp_connected = false;
+  // }
 
   if (ETH.linkUp()) {
     eth_connected = true;
