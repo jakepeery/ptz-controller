@@ -120,6 +120,23 @@ void drawRX(String received) {
   display.print(buffer);
 
 
+
+
+  //focus type selection
+  display.setCursor(4, 28);
+  char focusMode[32];
+
+  // mode2=auto    mode3=manual
+  if (cameras[SELECTED_CAMERA].focus_mode == 2){
+    sprintf(focusMode, "Focus: AUTO");
+  } else {
+    sprintf(focusMode, "Focus: Manual");
+  }
+  display.print(focusMode);
+
+
+
+
   // max speed values
   display.setCursor(4, 37);
   char max_title[32];

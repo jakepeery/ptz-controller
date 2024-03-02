@@ -45,6 +45,7 @@ struct CameraProperties{
   int max_zoom = MAX_ZOOM; 
   IPAddress ipAddress;
   int visca_port;
+  int focus_mode = 2; //initialize as auto mode
 };
 
 extern int JOYSTICK_X, JOYSTICK_Y, JOYSTICK_TWIST;

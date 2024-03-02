@@ -71,15 +71,109 @@ void EvaluateZoom(int zoom, char* command){
   char temp[24];
   snprintf(temp, 24, "%s%c%c", ptzPrefix, cmd, char(255));
   
-  Serial.print("\xAA\xAA\xAA\xAA\xAA\xAA\xAA\xAA");
   for (int i=0; i<24; i++){
     command[i] = temp[i];
     Serial.printf("$%x ",temp[i]);
   }
-  // //Serial.println(temp);
-  // Serial.print("\xBB\xBB\xBB\xBB\xBB\xBB\xBB\xBB");
-  // Serial.println(command);
 
+}
+
+//8x 01 04 3F 02 pp FF  pp = 00 - 63
+void EvaluatePresetRecall(int preset, char* command){
+  char ptzPrefix[] = "\x81\x01\x04\x3F\x02";
+  char cmd;
+  Serial.print("EvaluatePresetRecall ");
+  Serial.println(preset);
+  switch (preset){
+    case 0:
+      cmd = char(0);
+      break;
+    case 1:
+      cmd = char(1);
+      break;
+    case 2:
+      cmd = char(2);
+      break;
+    case 3:
+      cmd = char(3);
+      break;
+    case 4:
+      cmd = char(4);
+      break;
+    case 5:
+      cmd = char(5);
+      break;
+    case 6:
+      cmd = char(6);
+      break;
+    case 7:
+      cmd = char(7);
+      break;
+    case 8:
+      cmd = char(8);
+      break;
+    case 9:
+      cmd = char(9);
+      break;
+  }
+
+  //Serial.printf("%s%c%c", ptzPrefix, cmd, char(255));
+  char temp[24];
+  snprintf(temp, 24, "%s%c%c", ptzPrefix, cmd, char(255));
+  
+  for (int i=0; i<24; i++){
+    command[i] = temp[i];
+    Serial.printf("$%x ",temp[i]);
+  }
+}
+
+//8x 01 04 3F 01 pp FF  pp = 00 - 63
+void EvaluatePresetStore(int preset, char* command){
+  char ptzPrefix[] = "\x81\x01\x04\x3F\x01";
+  char cmd;
+  Serial.print("EvaluatePresetStore ");
+  Serial.println(preset);
+  switch (preset){
+    case 0:
+      cmd = char(0);
+      break;
+    case 1:
+      cmd = char(1);
+      break;
+    case 2:
+      cmd = char(2);
+      break;
+    case 3:
+      cmd = char(3);
+      break;
+    case 4:
+      cmd = char(4);
+      break;
+    case 5:
+      cmd = char(5);
+      break;
+    case 6:
+      cmd = char(6);
+      break;
+    case 7:
+      cmd = char(7);
+      break;
+    case 8:
+      cmd = char(8);
+      break;
+    case 9:
+      cmd = char(9);
+      break;
+  }
+
+  //Serial.printf("%s%c%c", ptzPrefix, cmd, char(255));
+  char temp[24];
+  snprintf(temp, 24, "%s%c%c", ptzPrefix, cmd, char(255));
+  
+  for (int i=0; i<24; i++){
+    command[i] = temp[i];
+    Serial.printf("$%x ",temp[i]);
+  }
 }
 
 
@@ -90,4 +184,61 @@ void OnePushFocus(char* command){
 
     //*command = String(temp);
     strcpy(command, temp);
+}
+
+//8x 01 04 38 pp FF   pp: 02=Auto Focus, 03=Manual Focus, 
+void FocusManual(char* command){
+    char ptzPrefix[] ="\x81\x01\x04\x38\x03";
+    char temp[24];
+    sprintf(temp, "%s%c", ptzPrefix, char(255));
+
+    //*command = String(temp);
+    strcpy(command, temp);
+}
+
+//8x 01 04 38 pp FF   pp: 02=Auto Focus, 03=Manual Focus, 
+void FocusAutomatic(char* command){
+    char ptzPrefix[] ="\x81\x01\x04\x38\x02";
+    char temp[24];
+    sprintf(temp, "%s%c", ptzPrefix, char(255));
+
+    //*command = String(temp);
+    strcpy(command, temp);
+}
+
+// stop   8x 01 04 08 00 FF
+// far    8x 01 04 08 2p FF
+// near   8x 01 04 08 3p FF
+void FocusFar(char* command){
+  char ptzPrefix[] ="\x81\x01\x04\x08\x20";
+  char temp[24];
+  sprintf(temp, "%s%c", ptzPrefix, char(255));
+
+  strcpy(command, temp);
+}
+
+
+// stop   8x 01 04 08 00 FF
+// far    8x 01 04 08 2p FF
+// near   8x 01 04 08 3p FF
+void FocusNear(char* command){
+  char ptzPrefix[] ="\x81\x01\x04\x08\x30";
+  char temp[24];
+  sprintf(temp, "%s%c", ptzPrefix, char(255));
+
+  strcpy(command, temp);
+}
+
+// stop   8x 01 04 08 00 FF
+// far    8x 01 04 08 2p FF
+// near   8x 01 04 08 3p FF
+void FocusStop(char* command){
+  char ptzPrefix[] ="\x81\x01\x04\x08";
+  char temp[24];
+  sprintf(temp, "%s%c%c", ptzPrefix, char(0), char(255));
+
+  for (int i=0; i<24; i++){
+    command[i] = temp[i];
+    //Serial.printf("$%x ",temp[i]);
+  }
 }

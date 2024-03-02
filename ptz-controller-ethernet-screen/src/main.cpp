@@ -14,6 +14,9 @@ int SELECTED_CAMERA = 1;
 String STATUS_TEXT;
 bool eth_connected = false;
 bool udp_connected = false;
+static char udpCommand[24];
+
+static TimerHandle_t StopFocusCallbackTimer;
 
 
 
@@ -29,24 +32,57 @@ void StorePreset(int preset) {
   STATUS_TEXT = "Stored Preset " + (String)preset;
 }
 
-
+// focus in/out
 void Encoder1(bool direction) {
+  UDP_Info ToSend;
   if (direction){
     Serial.println("Encoder1 In");
-    STATUS_TEXT = "Encoder1 In";
+    STATUS_TEXT = "Focus In";
+    FocusNear(udpCommand);
   } else {
     Serial.println("Encoder1 Out");
-    STATUS_TEXT = "Encoder1 Out";
+    STATUS_TEXT = "Focus Out";
+    FocusFar(udpCommand);
   }
+
+  ToSend.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
+  ToSend.Port = cameras[SELECTED_CAMERA].visca_port;
+  ToSend.Message = udpCommand;
+
+  xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
+  xTimerStart(StopFocusCallbackTimer, 30);
 }
 
-void Encoder1Press(bool state){
-  UDP_Info Testing;
-  Testing.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
-  Testing.Port = cameras[SELECTED_CAMERA].visca_port;
-  Testing.Message = "UDP Message To Send";
+void StopFocusCallback(TimerHandle_t xTimer) {
+  Serial.println("Timer Callback");
+  UDP_Info ToSend;
+  FocusStop(udpCommand);
+  ToSend.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
+  ToSend.Port = cameras[SELECTED_CAMERA].visca_port;
+  ToSend.Message = udpCommand;
+  xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
+}
 
-  xQueueSend(UDP_Queue, (void*)&Testing, (TickType_t) 0);
+// manual/automatic focus
+void Encoder1Press(bool state){
+  UDP_Info ToSend;
+  // mode2=auto    mode3=manual
+  if (cameras[SELECTED_CAMERA].focus_mode == 2) {
+    cameras[SELECTED_CAMERA].focus_mode = 3;
+    FocusManual(udpCommand);
+    STATUS_TEXT = "Focus Manual";
+  } else{
+    cameras[SELECTED_CAMERA].focus_mode = 2;
+    FocusAutomatic(udpCommand);
+    STATUS_TEXT = "Focus Auto";
+  }
+  
+  ToSend.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
+  ToSend.Port = cameras[SELECTED_CAMERA].visca_port;
+  ToSend.Message = udpCommand;
+
+  xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
+  
 }
 
 void Encoder2(bool direction) {
@@ -107,6 +143,7 @@ void EvaluateRXString(String RX) {
   static int newJoystickY;
   static int newJoystickTwist;
   const char* rx_chars = RX.c_str();
+  
   // Serial.printf("Evaluating RX: %s\n", rx_chars);
 
   UDP_Info ToSend;
@@ -186,6 +223,9 @@ void EvaluateRXString(String RX) {
         STATUS_TEXT = "Key Pressed #";
       } else {
         RecallPreset(value.toInt());
+        EvaluatePresetRecall(value.toInt(), udpCommand);
+        ToSend.Message = udpCommand;
+        xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
       }
     } else if (command == "key_long") {
       // STATUS_TEXT = command + " " + value;
@@ -204,6 +244,9 @@ void EvaluateRXString(String RX) {
         STATUS_TEXT = "Key Held #";
       } else {
         StorePreset(value.toInt());
+        EvaluatePresetStore(value.toInt(), udpCommand);
+        ToSend.Message = udpCommand;
+        xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
       }
     }
   } else {
@@ -212,7 +255,7 @@ void EvaluateRXString(String RX) {
   }
 
   
-  static char udpCommand[24];
+  
   if (JOYSTICK_X != newJoystickX || JOYSTICK_Y != newJoystickY){
     JOYSTICK_X = newJoystickX;
     JOYSTICK_Y = newJoystickY;
@@ -356,6 +399,36 @@ void setup() {
       (void*)NULL,        /* Parameter passed as input of the task */
       2,                  /* Priority of the task. */
       &SendUDP_Task);     /* Task handle. */
+  }
+
+
+  StopFocusCallbackTimer =
+    xTimerCreate("Store_Temp_Timer",          // Name of timer - not really used
+                  30 / portTICK_PERIOD_MS,   // Period of timer in ticks
+                  pdFALSE,                    // pdTRUE to auto-reload timer
+                  (void *)0,                  // Timer ID
+                  StopFocusCallback);         // the callback function
+
+  // Give timer time to start if needed
+  if (StopFocusCallbackTimer == NULL) {
+    Serial.println("Could not create timer");
+  } else {
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    Serial.println("Starting timer");
+  }
+
+  //initialize all cameras to auto focus mode
+  //sorry, I'm too lazy to read the camera values
+  UDP_Info ToSend;
+  for (int i=1; i<5; i++){
+    FocusAutomatic(udpCommand);
+    cameras[SELECTED_CAMERA].focus_mode = 2;
+    ToSend.IP_Address = cameras[i].ipAddress;
+    ToSend.Port = cameras[i].visca_port;
+    ToSend.Message = udpCommand;
+
+    xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
+    delay(100);
   }
 }
 
