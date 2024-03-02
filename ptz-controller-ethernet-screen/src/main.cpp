@@ -223,17 +223,9 @@ void EvaluateRXString(String RX) {
 
   if (JOYSTICK_TWIST != newJoystickTwist){
     JOYSTICK_TWIST = newJoystickTwist;
-    if (JOYSTICK_TWIST == 0){
-      ToSend.Message = "\x81\x01\x04\x07\x00\xFF";
-      xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
-    } else {
-      EvaluateZoom(JOYSTICK_TWIST, udpCommand);
-      ToSend.Message = udpCommand;
-      xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
-    }
-    
-    // Serial.print("\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF");
-    // Serial.print(ToSend.Message);
+    EvaluateZoom(JOYSTICK_TWIST, udpCommand);
+    ToSend.Message = udpCommand;
+    xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
   }
 
 }
@@ -301,6 +293,7 @@ void SendVISCACommands(void* pvParameters) {
       // have to loop and send packets due to VISCA using \x00 in strings
       // and c using null as the termination char for char arrays and strings
       udp.beginPacket(cameras[SELECTED_CAMERA].ipAddress, cameras[SELECTED_CAMERA].visca_port);
+      udp_connected = true;
       for (int i=0; i<24; i++){
         Serial.printf("$%x ",received_item.Message[i]);
         udp.printf("%c", received_item.Message[i]);
@@ -311,7 +304,7 @@ void SendVISCACommands(void* pvParameters) {
       udp.endPacket();
       //Serial.println("\nEnd UDP TX");
     }
-    vTaskDelay(50);
+    vTaskDelay(20);
   }
 }
 
@@ -384,11 +377,6 @@ void loop() {
     toPrint = RXString;
   }
 
-  // if (udp.connected()) {
-  //   udp_connected = true;
-  // } else {
-  //   udp_connected = false;
-  // }
 
   if (ETH.linkUp()) {
     eth_connected = true;

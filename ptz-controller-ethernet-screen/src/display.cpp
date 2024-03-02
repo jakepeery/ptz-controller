@@ -98,6 +98,7 @@ void drawRX(String received) {
   }else{
     sprintf(connection_indicator, "   - -");
   }
+  udp_connected = false;
   display.print(connection_indicator);
 
 
