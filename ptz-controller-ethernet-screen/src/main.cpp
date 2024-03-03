@@ -1,8 +1,9 @@
 #include "main.h"
+#include <Preferences.h>
 #include "VISCA_Evaluators.h"
 #include "display.h"
 
-
+static Preferences storedValues;
 CameraProperties cameras[5];
 //AsyncUDP udp;
 WiFiUDP udp;
@@ -17,6 +18,82 @@ bool udp_connected = false;
 static char udpCommand[24];
 
 static TimerHandle_t StopFocusCallbackTimer;
+static TimerHandle_t SaveValuesCallbackTimer;
+// xTimerStart(SaveValuesCallbackTimer, 30);
+
+
+
+
+void SaveValuesCallback(TimerHandle_t xTimer) {
+  String prefix;
+
+  switch (SELECTED_CAMERA){
+    case 1: prefix = "Cam1"; break;
+    case 2: prefix = "Cam2"; break;
+    case 3: prefix = "Cam3"; break;
+    case 4: prefix = "Cam4"; break;
+  }
+  Serial.print("Storing camera values with prefix: ");
+  Serial.println(prefix);
+
+  storedValues.begin(prefix.c_str(), false);
+  storedValues.putInt("ipAddress", cameras[SELECTED_CAMERA].ipAddress);
+  storedValues.putInt("visca_port", cameras[SELECTED_CAMERA].visca_port);
+  storedValues.putInt("max_pan", cameras[SELECTED_CAMERA].max_pan);
+  storedValues.putInt("max_tilt", cameras[SELECTED_CAMERA].max_tilt);
+  storedValues.putInt("max_zoom", cameras[SELECTED_CAMERA].max_zoom);
+  storedValues.end();
+  Serial.println("Stored Values to Flash Memory");
+}
+
+void StoreAllCameras(){
+  TimerHandle_t xTimer;
+  SELECTED_CAMERA = 1;
+  SaveValuesCallback(xTimer);
+  delay(200);
+
+  SELECTED_CAMERA = 2;
+  SaveValuesCallback(xTimer);
+  delay(200);
+
+  SELECTED_CAMERA = 3;
+  SaveValuesCallback(xTimer);
+  delay(200);
+
+  SELECTED_CAMERA = 4;
+  SaveValuesCallback(xTimer);
+  delay(200);
+
+  SELECTED_CAMERA = 1;
+}
+
+void RecallCameraValues(){
+  String prefix;
+  
+  for (int i=1; i<5; i++){
+    switch (i){
+      case 1: prefix = "Cam1"; break;
+      case 2: prefix = "Cam2"; break;
+      case 3: prefix = "Cam3"; break;
+      case 4: prefix = "Cam4"; break;
+    }
+  storedValues.begin(prefix.c_str(), true);
+  cameras[i].ipAddress = storedValues.getInt("ipAddress", IPAddress(192, 168, 1, 28));
+  cameras[i].visca_port = storedValues.getInt("visca_port", 1259);
+  cameras[i].max_pan = storedValues.getInt("max_pan", 10);
+  cameras[i].max_tilt = storedValues.getInt("max_tilt", 10);
+  cameras[i].max_zoom = storedValues.getInt("max_zoom", 5);
+  
+  Serial.print(i);
+  Serial.print(prefix);
+  Serial.print(" Recalled Camera IP Address: ");
+  Serial.println(cameras[i].ipAddress);
+
+  storedValues.end();
+  delay(100);
+  }
+}
+
 
 
 
@@ -121,6 +198,7 @@ void Encoder2(bool direction) {
   }
 
   //to do add in storing to persistent storage
+  xTimerStart(SaveValuesCallbackTimer, 30);
 }
 
 void Encoder2Press(bool state){
@@ -352,22 +430,20 @@ void SendVISCACommands(void* pvParameters) {
 }
 
 void setup() {
-  // to do initialize camera IPs from persistent storage
-  cameras[1].ipAddress = IPAddress(192, 168, 1, 28);
-  cameras[2].ipAddress = IPAddress(192, 168, 1, 29);
-  cameras[3].ipAddress = IPAddress(192, 168, 1, 30);
-  cameras[4].ipAddress = IPAddress(192, 168, 1, 101);
-  cameras[1].visca_port = 1259;
-  cameras[2].visca_port = 1259;
-  cameras[3].visca_port = 1259;
-  cameras[4].visca_port = 1259;
-
-  //to do initialize max ptz values from persistent storage 
-  //*******(maybe just initialize the entire cameras struct??)*******
-
   Serial.begin(115200);
   Serial2.begin(115200, SERIAL_8N1, RXD2, TXD2);
   Wire.setPins(OLED_SDA, OLED_SCL);
+
+  //safety default values incase params dont exist
+  // cameras[1].ipAddress = IPAddress(192, 168, 1, 28);
+  // cameras[2].ipAddress = IPAddress(192, 168, 1, 29);
+  // cameras[3].ipAddress = IPAddress(192, 168, 1, 30);
+  // cameras[4].ipAddress = IPAddress(192, 168, 1, 101);
+  // cameras[1].visca_port = 1259;
+  // cameras[2].visca_port = 1259;
+  // cameras[3].visca_port = 1259;
+  // cameras[4].visca_port = 1259;
+
 
   //-------------------------------OLED----------------------------------
   DisplayStartup();
@@ -381,6 +457,8 @@ void setup() {
   Serial.print("Local IP Address");
   Serial.println(ETH.localIP());
   delay(2000);
+
+
 
   //---------------------------------------------------------------------
   //-------------------------- Create Integer Queue----------------------
@@ -403,7 +481,7 @@ void setup() {
 
 
   StopFocusCallbackTimer =
-    xTimerCreate("Store_Temp_Timer",          // Name of timer - not really used
+    xTimerCreate("Stop_Focus_Timer",          // Name of timer - not really used
                   30 / portTICK_PERIOD_MS,   // Period of timer in ticks
                   pdFALSE,                    // pdTRUE to auto-reload timer
                   (void *)0,                  // Timer ID
@@ -416,6 +494,29 @@ void setup() {
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     Serial.println("Starting timer");
   }
+
+  SaveValuesCallbackTimer =
+    xTimerCreate("Save_Prefs_Timer",          // Name of timer - not really used
+                  30 / portTICK_PERIOD_MS,   // Period of timer in ticks
+                  pdFALSE,                    // pdTRUE to auto-reload timer
+                  (void *)0,                  // Timer ID
+                  SaveValuesCallback);         // the callback function
+
+  // Give timer time to start if needed
+  if (SaveValuesCallbackTimer == NULL) {
+    Serial.println("Could not create SaveValuesCallbackTimer timer");
+  } else {
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    Serial.println("Starting SaveValuesCallbackTimer timer");
+  }
+
+
+  
+
+  // initialize camera IPs from persistent storage
+  RecallCameraValues();
+  delay(100);
+
 
   //initialize all cameras to auto focus mode
   //sorry, I'm too lazy to read the camera values
@@ -430,6 +531,14 @@ void setup() {
     xQueueSend(UDP_Queue, (void*)&ToSend, (TickType_t) 0);
     delay(100);
   }
+
+  
+  // StoreAllCameras(); //just for testing
+  // delay(1000); //just for testing
+  // RecallCameraValues();
+
+
+
 }
 
 

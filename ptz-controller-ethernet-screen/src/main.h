@@ -40,9 +40,9 @@ struct UDP_Info {
 };
 
 struct CameraProperties{
-  int max_pan = MAX_PAN;
-  int max_tilt = MAX_TILT;
-  int max_zoom = MAX_ZOOM; 
+  int max_pan = MAX_PAN; //should not initialize to this with parameter recall
+  int max_tilt = MAX_TILT;  //should not initialize to this with parameter recall
+  int max_zoom = MAX_ZOOM;   //should not initialize to this with parameter recall
   IPAddress ipAddress;
   int visca_port;
   int focus_mode = 2; //initialize as auto mode
