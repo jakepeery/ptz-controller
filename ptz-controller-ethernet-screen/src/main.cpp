@@ -21,6 +21,9 @@ static TimerHandle_t StopFocusCallbackTimer;
 static TimerHandle_t SaveValuesCallbackTimer;
 // xTimerStart(SaveValuesCallbackTimer, 30);
 
+bool cameraIPSetupMode = false;
+bool deviceIPSetupMode = false;
+
 
 
 
@@ -220,9 +223,6 @@ void EvaluateRXString(String RX) {
   static int newJoystickX;
   static int newJoystickY;
   static int newJoystickTwist;
-  const char* rx_chars = RX.c_str();
-  
-  // Serial.printf("Evaluating RX: %s\n", rx_chars);
 
   UDP_Info ToSend;
   ToSend.IP_Address = cameras[SELECTED_CAMERA].ipAddress;
@@ -235,8 +235,8 @@ void EvaluateRXString(String RX) {
   int split = RX.indexOf(xy_response);
 
   if (split > 0) {
-    String command = RX.substring(0, split);
-    String value = RX.substring(split + 1);
+    command = RX.substring(0, split);
+    value = RX.substring(split + 1);
 
     split = value.indexOf(String("\r"));
     value = value.substring(0, split); //remove the \r\n
@@ -310,14 +310,19 @@ void EvaluateRXString(String RX) {
     } else if (command == "key_held") {
       if (value.equals("A")) {
         SELECTED_CAMERA = 1;
+        cameraIPSetupMode = true;
       } else if (value.equals("B")) {
         SELECTED_CAMERA = 2;
+        cameraIPSetupMode = true;
       } else if (value.equals("C")) {
         SELECTED_CAMERA = 3;
+        cameraIPSetupMode = true;
       } else if (value.equals("D")) {
         SELECTED_CAMERA = 4;
+        cameraIPSetupMode = true;
       } else if (value.equals("*")) {
         STATUS_TEXT = "Key Held *";
+        deviceIPSetupMode = true;
       } else if (value.equals("#")) {
         STATUS_TEXT = "Key Held #";
       } else {
@@ -350,6 +355,90 @@ void EvaluateRXString(String RX) {
   }
 
 }
+
+
+void EvaluateSetupRXString(String RX) {
+  String command, value;
+   // split the string on the :
+  String xy_response = ":";
+  int split = RX.indexOf(xy_response);
+
+  if (split > 0) {
+    command = RX.substring(0, split);
+    value = RX.substring(split + 1);
+
+    split = value.indexOf(String("\r"));
+    value = value.substring(0, split); //remove the \r\n
+
+    // event triggers
+    if (command == "encoder1_press") {
+      Encoder1Press(value.toInt());
+    } else if (command == "encoder1_up") {
+      Encoder1(true);
+    } else if (command == "encoder1_down") {
+      Encoder1(false);
+
+    } else if (command == "encoder2_press") {
+      Encoder2Press(value.toInt());
+    } else if (command == "encoder2_up") {
+      Encoder2(true);
+    } else if (command == "encoder2_down") {
+      Encoder2(false);
+
+    } else if (command == "key_raw") {
+      // raw keypad here
+    } else if (command == "key_short") {
+      if (value.equals("A")) {
+        SELECTED_CAMERA = 1;
+        cameraIPSetupMode = false;
+      } else if (value.equals("B")) {
+        SELECTED_CAMERA = 2;
+        cameraIPSetupMode = false;
+      } else if (value.equals("C")) {
+        SELECTED_CAMERA = 3;
+        cameraIPSetupMode = false;
+      } else if (value.equals("D")) {
+        SELECTED_CAMERA = 4;
+        cameraIPSetupMode = false;
+      } else if (value.equals("*")) {
+        STATUS_TEXT = "Key Pressed *";
+      } else if (value.equals("#")) {
+        STATUS_TEXT = "Key Pressed #";
+        deviceIPSetupMode = false;
+      } else {
+
+      }
+    } else if (command == "key_long") {
+      // STATUS_TEXT = command + " " + value;
+    } else if (command == "key_held") {
+      if (value.equals("A")) {
+        SELECTED_CAMERA = 1;
+        cameraIPSetupMode = false;
+      } else if (value.equals("B")) {
+        SELECTED_CAMERA = 2;
+        cameraIPSetupMode = false;
+      } else if (value.equals("C")) {
+        SELECTED_CAMERA = 3;
+        cameraIPSetupMode = false;
+      } else if (value.equals("D")) {
+        SELECTED_CAMERA = 4;
+        cameraIPSetupMode = false;
+      } else if (value.equals("*")) {
+        STATUS_TEXT = "Key Held *";
+        deviceIPSetupMode = false;
+      } else if (value.equals("#")) {
+        STATUS_TEXT = "Key Held #";
+      } else {
+
+      }
+    }
+  } else {
+    Serial.println("ERROR: BAD FORMATTING, NO ':'");
+    return;
+  }
+
+}
+
 
 
 void Net_Event(WiFiEvent_t event){
@@ -547,18 +636,16 @@ unsigned long displayTimer;
 
 void loop() {
   String RXString;
-  String toPrint;
   if (Serial2.available()) {
     RXString = Serial2.readStringUntil('\n');
     // Serial.print("RX ");
     // Serial.println(RXString);
-    EvaluateRXString(RXString);
+    if (cameraIPSetupMode || deviceIPSetupMode){
+      EvaluateSetupRXString(RXString);
+    }else{
+      EvaluateRXString(RXString);
+    }
   }
-
-  if (RXString != toPrint && RXString != "") {
-    toPrint = RXString;
-  }
-
 
   if (ETH.linkUp()) {
     eth_connected = true;
@@ -570,6 +657,17 @@ void loop() {
 
   if (millis() > displayTimer) {
     displayTimer = millis() + 30;
-    drawRX(toPrint);
+    IPAddress ip;
+    if (cameraIPSetupMode){
+      ip = cameras[SELECTED_CAMERA].ipAddress;
+      int p = cameras[SELECTED_CAMERA].visca_port;
+      DrawCameraSetup(ip[0], ip[1], ip[2], ip[3], p, 1);
+    }else if (deviceIPSetupMode){
+      ip = ETH.localIP();
+      IPAddress s = ETH.subnetMask();
+      DrawDeviceSetup(ip[0], ip[1], ip[2], ip[3], s[0], s[1], s[2], s[3], "DHCP", 1);
+    }else{
+      drawRX();
+    }
   }
 }

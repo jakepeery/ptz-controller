@@ -34,6 +34,8 @@ String IpAddress2String(const IPAddress& ipAddress) {
   String(ipAddress[3])  ; 
 }
 
+
+
 void IpAddressScreen(IPAddress displayIP, IPAddress displaySubnet) {
   char stat[64];
   char mode[64];
@@ -60,7 +62,7 @@ void IpAddressScreen(IPAddress displayIP, IPAddress displaySubnet) {
 unsigned long status_clear_timer;
 String Previous_Status_Text;
 
-void drawRX(String received) {
+void drawRX() {
   // const char* toPrint = received.c_str(); 
   display.clearDisplay();
 
@@ -189,6 +191,173 @@ void drawRX(String received) {
 
   display.setCursor(80, 57);
   display.print(joystick_twist_print);
+
+
+  display.display();
+}
+
+void DrawCameraSetup(int oct1, int oct2, int oct3, int oct4,
+                     int cameraVISCAPort, int selectedValue) {
+  char ipAddress1[8];
+  char ipAddress2[8];
+  char ipAddress3[8];
+  char ipAddress4[8];
+  sprintf(ipAddress1, "%03d",oct1);
+  sprintf(ipAddress2, "%03d",oct2);
+  sprintf(ipAddress3, "%03d",oct3);
+  sprintf(ipAddress4, "%03d",oct4);
+
+  char port[16];
+  sprintf(port, "%d",cameraVISCAPort);
+
+  display.clearDisplay();
+
+  display.setTextColor(SSD1306_WHITE);  // Draw white text
+  display.setCursor(0, 0);              // Start at top-left corner
+  display.cp437(true);  // Use full 256 char 'Code Page 437' font
+
+
+  display.setTextSize(1);
+  display.print(F("Setup Cam: "));
+  char sel_cam[8];
+  //Serial.println(SELECTED_CAMERA);
+  if (SELECTED_CAMERA == 1){
+    sprintf(sel_cam, "A");
+  } else if (SELECTED_CAMERA == 2){
+    sprintf(sel_cam, "B");
+  } else if (SELECTED_CAMERA == 3){
+    sprintf(sel_cam, "C");
+  } else if (SELECTED_CAMERA == 4){
+    sprintf(sel_cam, "D");
+  } else {
+    sprintf(sel_cam, "N/A");
+  }
+  display.print(sel_cam);
+
+
+  // sprintf(ipAddress, "%s", IpAddress2String(cameras[SELECTED_CAMERA].ipAddress));
+  // sprintf(port, "%d", cameras[SELECTED_CAMERA].visca_port);
+  display.setTextSize(1);
+
+  const int row = 30;
+  const int startCol = 5;
+  const int octetWidth = 18;
+  
+  display.setCursor(0, row -10);
+  display.print("IP Addr:");
+
+  display.setCursor(startCol, row);
+  display.print(ipAddress1);
+  display.print(".");
+
+  display.setCursor(startCol + octetWidth, row);
+  display.print(ipAddress2);
+  display.print(".");
+
+  display.setCursor(startCol + 2 * octetWidth, row);
+  display.print(ipAddress3);
+  display.print(".");
+
+  display.setCursor(startCol + 3 * octetWidth, row);
+  display.print(ipAddress4);
+
+
+  display.setCursor(0, row +15);
+  display.print("Port:");
+  display.setCursor(5, row +25);
+  display.print(port);
+
+
+  display.display();
+}
+
+void DrawDeviceSetup(int oct1, int oct2, int oct3, int oct4, int sub1, int sub2,
+                     int sub3, int sub4, String DHCPMode, int selectedValue) {
+  char ipAddress1[8];
+  char ipAddress2[8];
+  char ipAddress3[8];
+  char ipAddress4[8];
+  sprintf(ipAddress1, "%03d",oct1);
+  sprintf(ipAddress2, "%03d",oct2);
+  sprintf(ipAddress3, "%03d",oct3);
+  sprintf(ipAddress4, "%03d",oct4);
+
+  char subnetMask1[8];
+  char subnetMask2[8];
+  char subnetMask3[8];
+  char subnetMask4[8];
+  sprintf(subnetMask1, "%03d",sub1);
+  sprintf(subnetMask2, "%03d",sub2);
+  sprintf(subnetMask3, "%03d",sub3);
+  sprintf(subnetMask4, "%03d",sub4);
+
+  char mode[64];
+
+  display.clearDisplay();
+
+  display.setTextColor(SSD1306_WHITE);  // Draw white text
+  display.setCursor(0, 0);              // Start at top-left corner
+  display.cp437(true);  // Use full 256 char 'Code Page 437' font
+
+  display.setTextSize(1);
+  display.print(F("Setup Device: "));
+
+  display.setTextSize(1);
+
+
+  // ip address
+  const int row = 30;
+  const int startCol = 5;
+  const int octetWidth = 18;
+  
+  display.setCursor(0, row -10);
+  display.print("IP Addr:");
+
+  display.setCursor(startCol, row);
+  display.print(ipAddress1);
+  display.print(".");
+
+  display.setCursor(startCol + octetWidth, row);
+  display.print(ipAddress2);
+  display.print(".");
+
+  display.setCursor(startCol + 2 * octetWidth, row);
+  display.print(ipAddress3);
+  display.print(".");
+
+  display.setCursor(startCol + 3 * octetWidth, row);
+  display.print(ipAddress4);
+
+
+
+  // subnet mask
+  display.setTextSize(1);
+
+  const int subnetRow = 50;
+  
+  display.setCursor(0, subnetRow -10);
+  display.print("Subnet:");
+
+  display.setCursor(startCol, subnetRow);
+  display.print(subnetMask1);
+  display.print(".");
+
+  display.setCursor(startCol + octetWidth, subnetRow);
+  display.print(subnetMask1);
+  display.print(".");
+
+  display.setCursor(startCol + 2 * octetWidth, subnetRow);
+  display.print(subnetMask1);
+  display.print(".");
+
+  display.setCursor(startCol + 3 * octetWidth, subnetRow);
+  display.print(subnetMask1);
+
+
+
+  // DHCP mode
+  display.print("Mode:");
+  display.println(mode);  //DHCP or Static
 
 
   display.display();
