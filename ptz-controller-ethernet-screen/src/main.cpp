@@ -24,6 +24,11 @@ static TimerHandle_t SaveValuesCallbackTimer;
 bool cameraIPSetupMode = false;
 bool deviceIPSetupMode = false;
 
+//Settings vars
+int selectedSetting = 0;
+int selectedSettingMax = 2;
+bool DeviceDHCP = true;
+
 
 
 
@@ -356,6 +361,23 @@ void EvaluateRXString(String RX) {
 
 }
 
+void SettingsEncoder2Press(){
+  if (selectedSetting >= selectedSettingMax) {
+    selectedSetting = 1;
+  } else {
+    selectedSetting++;
+  }
+}
+
+void SettingsEncoder2(bool up){
+
+  if (up) {
+    //up
+  } else{
+    //down
+  }
+
+}
 
 void EvaluateSetupRXString(String RX) {
   String command, value;
@@ -372,18 +394,18 @@ void EvaluateSetupRXString(String RX) {
 
     // event triggers
     if (command == "encoder1_press") {
-      Encoder1Press(value.toInt());
+      //Encoder1Press(value.toInt());
     } else if (command == "encoder1_up") {
-      Encoder1(true);
+      //Encoder1(true);
     } else if (command == "encoder1_down") {
-      Encoder1(false);
+      //Encoder1(false);
 
     } else if (command == "encoder2_press") {
-      Encoder2Press(value.toInt());
+      SettingsEncoder2Press();
     } else if (command == "encoder2_up") {
-      Encoder2(true);
+      SettingsEncoder2(true);
     } else if (command == "encoder2_down") {
-      Encoder2(false);
+      SettingsEncoder2(false);
 
     } else if (command == "key_raw") {
       // raw keypad here
@@ -405,6 +427,7 @@ void EvaluateSetupRXString(String RX) {
       } else if (value.equals("#")) {
         STATUS_TEXT = "Key Pressed #";
         deviceIPSetupMode = false;
+        cameraIPSetupMode = false;
       } else {
 
       }
@@ -426,8 +449,11 @@ void EvaluateSetupRXString(String RX) {
       } else if (value.equals("*")) {
         STATUS_TEXT = "Key Held *";
         deviceIPSetupMode = false;
+        cameraIPSetupMode = false;
       } else if (value.equals("#")) {
         STATUS_TEXT = "Key Held #";
+        deviceIPSetupMode = false;
+        cameraIPSetupMode = false;
       } else {
 
       }
@@ -488,6 +514,7 @@ void Net_Event(WiFiEvent_t event){
 void SendVISCACommands(void* pvParameters) {
   UDP_Info received_item;
   int lastCamTracking;
+
   while (1) {
     if (xQueueReceive(UDP_Queue, &received_item, (TickType_t)20) == pdTRUE) {
       // if received something in the queue
@@ -559,22 +586,23 @@ void setup() {
     //if queue is created
 	  Serial.print("Integer Queue Created successfully\n");
 
-    xTaskCreate(
-      SendVISCACommands,  /* Task function. */
-      "GetTemps",         /* String with name of task. */
-      10000,              /* Stack size in words. */
-      (void*)NULL,        /* Parameter passed as input of the task */
-      2,                  /* Priority of the task. */
-      &SendUDP_Task);     /* Task handle. */
+  xTaskCreate(
+    SendVISCACommands,  /* Task function. */
+    "GetTemps",         /* String with name of task. */
+    10000,              /* Stack size in words. */
+    (void*)NULL,        /* Parameter passed as input of the task */
+    2,                  /* Priority of the task. */
+    &SendUDP_Task);     /* Task handle. */
   }
 
 
   StopFocusCallbackTimer =
-    xTimerCreate("Stop_Focus_Timer",          // Name of timer - not really used
-                  30 / portTICK_PERIOD_MS,   // Period of timer in ticks
-                  pdFALSE,                    // pdTRUE to auto-reload timer
-                  (void *)0,                  // Timer ID
-                  StopFocusCallback);         // the callback function
+    xTimerCreate(
+      "Stop_Focus_Timer",         // Name of timer - not really used
+      30 / portTICK_PERIOD_MS,    // Period of timer in ticks
+      pdFALSE,                    // pdTRUE to auto-reload timer
+      (void *)0,                  // Timer ID
+      StopFocusCallback);         // the callback function
 
   // Give timer time to start if needed
   if (StopFocusCallbackTimer == NULL) {
@@ -585,11 +613,12 @@ void setup() {
   }
 
   SaveValuesCallbackTimer =
-    xTimerCreate("Save_Prefs_Timer",          // Name of timer - not really used
-                  30 / portTICK_PERIOD_MS,   // Period of timer in ticks
-                  pdFALSE,                    // pdTRUE to auto-reload timer
-                  (void *)0,                  // Timer ID
-                  SaveValuesCallback);         // the callback function
+    xTimerCreate(
+      "Save_Prefs_Timer",         // Name of timer - not really used
+      30 / portTICK_PERIOD_MS,    // Period of timer in ticks
+      pdFALSE,                    // pdTRUE to auto-reload timer
+      (void *)0,                  // Timer ID
+      SaveValuesCallback);        // the callback function
 
   // Give timer time to start if needed
   if (SaveValuesCallbackTimer == NULL) {
@@ -599,8 +628,6 @@ void setup() {
     Serial.println("Starting SaveValuesCallbackTimer timer");
   }
 
-
-  
 
   // initialize camera IPs from persistent storage
   RecallCameraValues();
@@ -621,12 +648,9 @@ void setup() {
     delay(100);
   }
 
-  
   // StoreAllCameras(); //just for testing
   // delay(1000); //just for testing
   // RecallCameraValues();
-
-
 
 }
 
@@ -661,13 +685,20 @@ void loop() {
     if (cameraIPSetupMode){
       ip = cameras[SELECTED_CAMERA].ipAddress;
       int p = cameras[SELECTED_CAMERA].visca_port;
-      DrawCameraSetup(ip[0], ip[1], ip[2], ip[3], p, 1);
+      selectedSettingMax = 5;
+      DrawCameraSetup(ip[0], ip[1], ip[2], ip[3], p, selectedSetting);
     }else if (deviceIPSetupMode){
       ip = ETH.localIP();
       IPAddress s = ETH.subnetMask();
-      DrawDeviceSetup(ip[0], ip[1], ip[2], ip[3], s[0], s[1], s[2], s[3], "DHCP", 1);
+      if (DeviceDHCP){
+        selectedSettingMax = 9; //Fix me to 1 -----------------------------------------------------------------
+      }else {
+        selectedSettingMax = 9;
+      }
+      DrawDeviceSetup(ip[0], ip[1], ip[2], ip[3], s[0], s[1], s[2], s[3], DeviceDHCP, selectedSetting);
     }else{
       drawRX();
+      selectedSetting = 1;
     }
   }
 }

@@ -202,9 +202,9 @@ void DrawCameraSetup(int oct1, int oct2, int oct3, int oct4,
   char ipAddress2[8];
   char ipAddress3[8];
   char ipAddress4[8];
-  sprintf(ipAddress1, "%03d",oct1);
-  sprintf(ipAddress2, "%03d",oct2);
-  sprintf(ipAddress3, "%03d",oct3);
+  sprintf(ipAddress1, "%03d.",oct1);
+  sprintf(ipAddress2, "%03d.",oct2);
+  sprintf(ipAddress3, "%03d.",oct3);
   sprintf(ipAddress4, "%03d",oct4);
 
   char port[16];
@@ -241,22 +241,22 @@ void DrawCameraSetup(int oct1, int oct2, int oct3, int oct4,
 
   const int row = 30;
   const int startCol = 5;
-  const int octetWidth = 18;
+  const int octetWidth = 24;
   
   display.setCursor(0, row -10);
   display.print("IP Addr:");
 
   display.setCursor(startCol, row);
   display.print(ipAddress1);
-  display.print(".");
+  //display.print(".");
 
   display.setCursor(startCol + octetWidth, row);
   display.print(ipAddress2);
-  display.print(".");
+  //display.print(".");
 
   display.setCursor(startCol + 2 * octetWidth, row);
   display.print(ipAddress3);
-  display.print(".");
+  //display.print(".");
 
   display.setCursor(startCol + 3 * octetWidth, row);
   display.print(ipAddress4);
@@ -268,30 +268,54 @@ void DrawCameraSetup(int oct1, int oct2, int oct3, int oct4,
   display.print(port);
 
 
+  switch (selectedValue){
+    //DHCP mode
+    case 1:
+    display.drawFastHLine(5, row + 33, 24, SSD1306_WHITE);
+    break;
+
+    //ip address
+    case 2:
+    display.drawFastHLine(startCol + 0 * octetWidth , row + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 3:
+    display.drawFastHLine(startCol + 1 * octetWidth, row + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 4:
+    display.drawFastHLine(startCol + 2 * octetWidth, row + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 5:
+    display.drawFastHLine(startCol + 3 * octetWidth, row + 8, 18, SSD1306_WHITE);
+    break;
+  }
+
+
+
   display.display();
 }
 
 void DrawDeviceSetup(int oct1, int oct2, int oct3, int oct4, int sub1, int sub2,
-                     int sub3, int sub4, String DHCPMode, int selectedValue) {
+                     int sub3, int sub4, bool DHCPMode, int selectedValue) {
   char ipAddress1[8];
   char ipAddress2[8];
   char ipAddress3[8];
   char ipAddress4[8];
-  sprintf(ipAddress1, "%03d",oct1);
-  sprintf(ipAddress2, "%03d",oct2);
-  sprintf(ipAddress3, "%03d",oct3);
+  sprintf(ipAddress1, "%03d.",oct1);
+  sprintf(ipAddress2, "%03d.",oct2);
+  sprintf(ipAddress3, "%03d.",oct3);
   sprintf(ipAddress4, "%03d",oct4);
 
   char subnetMask1[8];
   char subnetMask2[8];
   char subnetMask3[8];
   char subnetMask4[8];
-  sprintf(subnetMask1, "%03d",sub1);
-  sprintf(subnetMask2, "%03d",sub2);
-  sprintf(subnetMask3, "%03d",sub3);
+  sprintf(subnetMask1, "%03d.",sub1);
+  sprintf(subnetMask2, "%03d.",sub2);
+  sprintf(subnetMask3, "%03d.",sub3);
   sprintf(subnetMask4, "%03d",sub4);
-
-  char mode[64];
 
   display.clearDisplay();
 
@@ -306,24 +330,24 @@ void DrawDeviceSetup(int oct1, int oct2, int oct3, int oct4, int sub1, int sub2,
 
 
   // ip address
-  const int row = 30;
+  const int row = 20;
   const int startCol = 5;
-  const int octetWidth = 18;
+  const int octetWidth = 24;
   
   display.setCursor(0, row -10);
   display.print("IP Addr:");
 
   display.setCursor(startCol, row);
   display.print(ipAddress1);
-  display.print(".");
+  //display.print(".");
 
   display.setCursor(startCol + octetWidth, row);
   display.print(ipAddress2);
-  display.print(".");
+  //display.print(".");
 
   display.setCursor(startCol + 2 * octetWidth, row);
   display.print(ipAddress3);
-  display.print(".");
+  //display.print(".");
 
   display.setCursor(startCol + 3 * octetWidth, row);
   display.print(ipAddress4);
@@ -333,31 +357,79 @@ void DrawDeviceSetup(int oct1, int oct2, int oct3, int oct4, int sub1, int sub2,
   // subnet mask
   display.setTextSize(1);
 
-  const int subnetRow = 50;
+  const int subnetRow = 40;
   
   display.setCursor(0, subnetRow -10);
   display.print("Subnet:");
 
   display.setCursor(startCol, subnetRow);
   display.print(subnetMask1);
-  display.print(".");
+  //display.print(".");
 
   display.setCursor(startCol + octetWidth, subnetRow);
-  display.print(subnetMask1);
-  display.print(".");
+  display.print(subnetMask2);
+  //display.print(".");
 
   display.setCursor(startCol + 2 * octetWidth, subnetRow);
-  display.print(subnetMask1);
-  display.print(".");
+  display.print(subnetMask3);
+  //display.print(".");
 
   display.setCursor(startCol + 3 * octetWidth, subnetRow);
-  display.print(subnetMask1);
+  display.print(subnetMask4);
 
 
 
   // DHCP mode
+
+  display.setCursor(0, subnetRow + 10);
   display.print("Mode:");
-  display.println(mode);  //DHCP or Static
+  if (DHCPMode){
+    display.println("DHCP");    //DHCP or Static
+  } else {
+    display.println("Static");  //DHCP or Static
+  }
+
+    //underline selected max value - timeout after 5 seconds
+  switch (selectedValue){
+    //DHCP mode
+    case 1:
+    display.drawFastHLine(29, subnetRow + 18, 24, SSD1306_WHITE);
+    break;
+
+    //ip address
+    case 2:
+    display.drawFastHLine(startCol + 0 * octetWidth , row + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 3:
+    display.drawFastHLine(startCol + 1 * octetWidth, row + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 4:
+    display.drawFastHLine(startCol + 2 * octetWidth, row + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 5:
+    display.drawFastHLine(startCol + 3 * octetWidth, row + 8, 18, SSD1306_WHITE);
+    break;
+
+    //subnet
+    case 6:
+    display.drawFastHLine(startCol + 0 *octetWidth, subnetRow + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 7:
+    display.drawFastHLine(startCol + 1 * octetWidth, subnetRow + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 8:
+    display.drawFastHLine(startCol + 2 * octetWidth, subnetRow + 8, 18, SSD1306_WHITE);
+    break;
+
+    case 9:
+    display.drawFastHLine(startCol + 3 * octetWidth, subnetRow + 8, 18, SSD1306_WHITE);
+    break;
+  } 
 
 
   display.display();
