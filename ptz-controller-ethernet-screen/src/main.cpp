@@ -27,9 +27,116 @@ bool deviceIPSetupMode = false;
 //Settings vars
 int selectedSetting = 0;
 int selectedSettingMax = 2;
-bool DeviceDHCP = true;
+
+IPAddress tempIP;
+IPAddress tempSubnet;
+int tempPort;
+int tempMode;
+
+//device ip settings
+IPAddress deviceIP;
+IPAddress deviceSubnet;
+bool deviceDHCP = true;
 
 
+
+
+
+void IncrementOctet(){
+
+}
+
+
+void SettingsEncoder2Press(){
+  if (selectedSetting >= selectedSettingMax) {
+    selectedSetting = 1;
+  } else {
+    selectedSetting++;
+  }
+}
+
+void RangeLimitIPInc(uint8_t *octet){
+ *octet = *octet + 1;
+ if (*octet > 255){*octet = 255;}
+}
+
+void RangeLimitIPDec(uint8_t *octet){
+ *octet = *octet - 1;
+ if (*octet < 0){*octet = 0;}
+}
+
+void RangeLimitPortInc(int *port){
+  *port = *port + 1;
+ if (*port > 65535){*port = 65535;}
+}
+
+void RangeLimitPortDec(int *port){
+  *port = *port - 1;
+ if (*port < 0){*port = 0;}
+}
+
+// changes the values of the temporary variables being displayed
+void SettingsEncoder2(bool up){
+  const int maxIP = 255;
+  const int minIP = 0;
+
+  int selectedOctet;
+
+  bool changingCameraIP = false;
+  bool changingCamersPort = false;
+  bool changingDeviceIP = false;
+  bool changingDeviceSubnet = false;
+  bool changingDeviceMode = false;
+
+  if (cameraIPSetupMode && selectedSetting >= 2){ //camera ip
+    selectedOctet = selectedSetting - 2;
+    changingCameraIP = true;
+  } else if (cameraIPSetupMode && selectedSetting == 1){ //camera port
+    changingCamersPort = true;
+
+  } else if (deviceIPSetupMode && selectedSetting >= 6){ // device subnet
+    selectedOctet = selectedSetting - 6;
+    changingDeviceSubnet = true;
+  } else if (deviceIPSetupMode && selectedSetting >= 2){ // device ip
+    selectedOctet = selectedSetting - 2;
+    changingDeviceIP = true;
+  } else if (deviceIPSetupMode && selectedSetting == 1){ // device mode
+    changingDeviceMode = true;
+  }
+
+
+  //incrtement
+  if (up) {
+    //camera settings
+    if (changingCameraIP) {RangeLimitIPInc(&tempIP[selectedOctet]);}
+    else if (changingCamersPort) {RangeLimitPortInc(&tempPort);}
+    //device settings
+    else if (changingDeviceIP) {RangeLimitIPInc(&tempIP[selectedOctet]);}
+    else if (changingDeviceSubnet) {RangeLimitIPInc(&tempIP[selectedOctet]);}
+    else if (changingDeviceMode) {if(tempMode){tempMode = false;} else{tempMode = true;};}
+  } 
+  //decrement
+  else{
+    //camera settings
+    if (changingCameraIP) {RangeLimitIPDec(&tempIP[selectedOctet]);}
+    else if (changingCamersPort) {RangeLimitPortDec(&tempPort);}
+    //device settings
+    else if (changingDeviceIP) {RangeLimitIPDec(&tempIP[selectedOctet]);}
+    else if (changingDeviceSubnet) {RangeLimitIPDec(&tempIP[selectedOctet]);}
+    else if (changingDeviceMode) {if(tempMode){tempMode = false;} else{tempMode = true;};}
+  }
+
+
+  if (cameraIPSetupMode){
+    cameras[SELECTED_CAMERA].ipAddress = tempIP;
+    cameras[SELECTED_CAMERA].visca_port = tempPort;
+  }else if (deviceIPSetupMode){
+    //set device values
+    deviceIP = tempIP;
+    deviceSubnet = tempSubnet;
+    deviceDHCP = tempMode;
+  }
+}
 
 
 void SaveValuesCallback(TimerHandle_t xTimer) {
@@ -41,17 +148,30 @@ void SaveValuesCallback(TimerHandle_t xTimer) {
     case 3: prefix = "Cam3"; break;
     case 4: prefix = "Cam4"; break;
   }
+
+  if (cameraIPSetupMode){
+    cameras[SELECTED_CAMERA].ipAddress = tempIP;
+    cameras[SELECTED_CAMERA].visca_port = tempPort;
+    storedValues.putInt("ipAddress", cameras[SELECTED_CAMERA].ipAddress);
+    storedValues.putInt("visca_port", cameras[SELECTED_CAMERA].visca_port);
+  }
+
   Serial.print("Storing camera values with prefix: ");
   Serial.println(prefix);
 
   storedValues.begin(prefix.c_str(), false);
-  storedValues.putInt("ipAddress", cameras[SELECTED_CAMERA].ipAddress);
-  storedValues.putInt("visca_port", cameras[SELECTED_CAMERA].visca_port);
+  
   storedValues.putInt("max_pan", cameras[SELECTED_CAMERA].max_pan);
   storedValues.putInt("max_tilt", cameras[SELECTED_CAMERA].max_tilt);
   storedValues.putInt("max_zoom", cameras[SELECTED_CAMERA].max_zoom);
   storedValues.end();
   Serial.println("Stored Values to Flash Memory");
+}
+
+void CloseCameraSettings(){
+  SaveValuesCallback(SaveValuesCallbackTimer);
+  delay(20);
+  cameraIPSetupMode = false;
 }
 
 void StoreAllCameras(){
@@ -102,8 +222,42 @@ void RecallCameraValues(){
   }
 }
 
+void RecallDeviceIPSettings(){
+  storedValues.begin("device", true);
+  deviceIP = storedValues.getInt("ipAddress", IPAddress(192, 168, 1, 201));
+  deviceSubnet = storedValues.getInt("subnet", IPAddress(255, 255, 255, 0));
+  deviceDHCP = storedValues.getBool("DHCP", true);
+  storedValues.end();
+}
 
+void SaveDeviceIPSettings() {
+  Serial.println("Evaluating If Save needed");
+  storedValues.begin("device", true);
+  int TEMPdeviceIP = storedValues.getInt("ipAddress");
+  int TEMPdeviceSubnet = storedValues.getInt("subnet");
+  int TEMPdeviceDHCP = storedValues.getBool("DHCP");
+  storedValues.end();
+  deviceIPSetupMode = false;
 
+  // only store ansd restart if new values
+  if (deviceIP != TEMPdeviceIP || deviceSubnet != TEMPdeviceSubnet ||
+      deviceDHCP != TEMPdeviceDHCP) {
+    Serial.println("Saving Values: ");
+    Serial.print("DeviceDHCP: ");
+    Serial.println(deviceDHCP);
+    Serial.print("deviceIP: ");
+    Serial.println(deviceIP);
+    Serial.print("deviceSubnet: ");
+    Serial.println(deviceSubnet);
+    storedValues.begin("device", false);
+    storedValues.putInt("ipAddress", deviceIP);
+    storedValues.putInt("subnet", deviceSubnet);
+    storedValues.putBool("DHCP", deviceDHCP);
+    storedValues.end();
+    delay(1000);
+    ESP.restart();
+  }
+}
 
 void RecallPreset(int preset) {
   Serial.print("Recalling preset:");
@@ -361,23 +515,7 @@ void EvaluateRXString(String RX) {
 
 }
 
-void SettingsEncoder2Press(){
-  if (selectedSetting >= selectedSettingMax) {
-    selectedSetting = 1;
-  } else {
-    selectedSetting++;
-  }
-}
 
-void SettingsEncoder2(bool up){
-
-  if (up) {
-    //up
-  } else{
-    //down
-  }
-
-}
 
 void EvaluateSetupRXString(String RX) {
   String command, value;
@@ -412,22 +550,24 @@ void EvaluateSetupRXString(String RX) {
     } else if (command == "key_short") {
       if (value.equals("A")) {
         SELECTED_CAMERA = 1;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("B")) {
         SELECTED_CAMERA = 2;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("C")) {
         SELECTED_CAMERA = 3;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("D")) {
         SELECTED_CAMERA = 4;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("*")) {
         STATUS_TEXT = "Key Pressed *";
       } else if (value.equals("#")) {
         STATUS_TEXT = "Key Pressed #";
-        deviceIPSetupMode = false;
-        cameraIPSetupMode = false;
+        if (deviceIPSetupMode){
+          SaveDeviceIPSettings();
+        }
+        CloseCameraSettings();
       } else {
 
       }
@@ -436,24 +576,28 @@ void EvaluateSetupRXString(String RX) {
     } else if (command == "key_held") {
       if (value.equals("A")) {
         SELECTED_CAMERA = 1;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("B")) {
         SELECTED_CAMERA = 2;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("C")) {
         SELECTED_CAMERA = 3;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("D")) {
         SELECTED_CAMERA = 4;
-        cameraIPSetupMode = false;
+        CloseCameraSettings();
       } else if (value.equals("*")) {
         STATUS_TEXT = "Key Held *";
-        deviceIPSetupMode = false;
-        cameraIPSetupMode = false;
+        if (deviceIPSetupMode){
+          SaveDeviceIPSettings();
+        }
+        CloseCameraSettings();
       } else if (value.equals("#")) {
         STATUS_TEXT = "Key Held #";
-        deviceIPSetupMode = false;
-        cameraIPSetupMode = false;
+        if (deviceIPSetupMode){
+          SaveDeviceIPSettings();
+        }
+        CloseCameraSettings();
       } else {
 
       }
@@ -567,12 +711,36 @@ void setup() {
   StartupScreen();
   
   WiFi.onEvent(Net_Event);
-  ETH.begin();
-  delay(100);
-  IpAddressScreen(ETH.localIP(), ETH.subnetMask());
+
+  RecallDeviceIPSettings();
+  delay(2000);
+  Serial.print("DeviceDHCP: ");
+  Serial.println(deviceDHCP);
+  Serial.print("deviceIP: ");
+  Serial.println(deviceIP);
+  Serial.print("deviceSubnet: ");
+  Serial.println(deviceSubnet);
+  
+  if (deviceDHCP){
+    Serial.println("Starting Ethernet with DHCP");
+    ETH.begin();
+    delay(500);
+    deviceIP = ETH.localIP();
+    deviceSubnet = ETH.subnetMask();
+  } else {
+    Serial.println("Starting Ethernet with Static Address");
+    ETH.begin();
+    ETH.config(deviceIP,IPAddress(192, 168, 0, 1),deviceSubnet);
+    delay(500);
+    deviceIP = ETH.localIP();
+    deviceSubnet = ETH.subnetMask();
+  }
+
+  IpAddressScreen(deviceIP, deviceSubnet);
   Serial.print("Local IP Address");
   Serial.println(ETH.localIP());
   delay(2000);
+  
 
 
 
@@ -681,21 +849,22 @@ void loop() {
 
   if (millis() > displayTimer) {
     displayTimer = millis() + 30;
-    IPAddress ip;
+    
     if (cameraIPSetupMode){
-      ip = cameras[SELECTED_CAMERA].ipAddress;
-      int p = cameras[SELECTED_CAMERA].visca_port;
+      tempIP = cameras[SELECTED_CAMERA].ipAddress;
+      tempPort = cameras[SELECTED_CAMERA].visca_port;
       selectedSettingMax = 5;
-      DrawCameraSetup(ip[0], ip[1], ip[2], ip[3], p, selectedSetting);
+      DrawCameraSetup(tempIP[0], tempIP[1], tempIP[2], tempIP[3], tempPort, selectedSetting);
     }else if (deviceIPSetupMode){
-      ip = ETH.localIP();
-      IPAddress s = ETH.subnetMask();
-      if (DeviceDHCP){
-        selectedSettingMax = 9; //Fix me to 1 -----------------------------------------------------------------
+      tempIP = deviceIP; //ETH.localIP();
+      tempSubnet = deviceSubnet; //ETH.subnetMask();
+      tempMode = deviceDHCP;
+      if (tempMode){
+        selectedSettingMax = 1; //Fix me to 1 -----------------------------------------------------------------
       }else {
         selectedSettingMax = 9;
       }
-      DrawDeviceSetup(ip[0], ip[1], ip[2], ip[3], s[0], s[1], s[2], s[3], DeviceDHCP, selectedSetting);
+      DrawDeviceSetup(tempIP[0], tempIP[1], tempIP[2], tempIP[3], tempSubnet[0], tempSubnet[1], tempSubnet[2], tempSubnet[3], tempMode, selectedSetting);
     }else{
       drawRX();
       selectedSetting = 1;
