@@ -47,4 +47,4 @@ Joystick       | https://www.amazon.com/gp/product/B0BRJBJ1GC
 Encoders       | https://www.amazon.com/gp/product/B08BFJ4F5C
 Keypad         | https://www.amazon.com/gp/product/B07THCLGCZ
 Display        |https://www.amazon.com/gp/product/B0B2R57SCJ
-- I had to solder some resistors on the display to convert it for I2C
+- I had to solder some resistors on the display to convert it for I2C like in this video: https://www.youtube.com/watch?v=uPWzL_MZ4q4
