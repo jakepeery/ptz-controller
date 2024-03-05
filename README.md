@@ -11,7 +11,7 @@
 
 I've included the .stl of the case I printed.  I did have to modify this after printing to include a hole for the network port.  I may update the drawing at some point in the future.
 
-Controls:
+## Controls:
 - Encoder 1
     - Press: Manual/Auto focus .
         - This can get out of sync if recalling presets.
@@ -38,7 +38,7 @@ Controls:
     - Keypad # and * long press: exits the device settings page.
 
 
-Here's my Amazon list I used for this build.
+## Parts
 Part          | Link
 ------------- | -------------
 Ethernet ESP-32| https://www.amazon.com/gp/product/B09V2VMMMX
