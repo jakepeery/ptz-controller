@@ -41,12 +41,6 @@ bool deviceDHCP = true;
 
 
 
-
-void IncrementOctet(){
-
-}
-
-
 void SettingsEncoder2Press(){
   if (selectedSetting >= selectedSettingMax) {
     selectedSetting = 1;
