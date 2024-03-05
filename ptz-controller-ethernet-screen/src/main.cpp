@@ -75,6 +75,77 @@ void RangeLimitPortDec(int *port){
  if (*port < 0){*port = 0;}
 }
 
+void RangeLimitPortIncHundred(int *port){
+  *port = *port + 200;
+ if (*port > 65535){*port = 65535;}
+}
+
+void RangeLimitPortDecHundred(int *port){
+  *port = *port - 200;
+ if (*port < 0){*port = 0;}
+}
+
+void SettingsEncoder1(bool up){
+  const int maxIP = 255;
+  const int minIP = 0;
+
+  int selectedOctet;
+
+  bool changingCameraIP = false;
+  bool changingCamersPort = false;
+  bool changingDeviceIP = false;
+  bool changingDeviceSubnet = false;
+  bool changingDeviceMode = false;
+
+  if (cameraIPSetupMode && selectedSetting >= 2){ //camera ip
+    selectedOctet = selectedSetting - 2;
+    changingCameraIP = true;
+  } else if (cameraIPSetupMode && selectedSetting == 1){ //camera port
+    changingCamersPort = true;
+
+  } else if (deviceIPSetupMode && selectedSetting >= 6){ // device subnet
+    selectedOctet = selectedSetting - 6;
+    changingDeviceSubnet = true;
+  } else if (deviceIPSetupMode && selectedSetting >= 2){ // device ip
+    selectedOctet = selectedSetting - 2;
+    changingDeviceIP = true;
+  } else if (deviceIPSetupMode && selectedSetting == 1){ // device mode
+    changingDeviceMode = true;
+  }
+
+  //incrtement
+  if (up) {
+    //camera settings
+    if (changingCameraIP) {RangeLimitIPInc(&tempIP[selectedOctet]);}
+    else if (changingCamersPort) {RangeLimitPortIncHundred(&tempPort);}
+    //device settings
+    else if (changingDeviceIP) {RangeLimitIPInc(&tempIP[selectedOctet]);}
+    else if (changingDeviceSubnet) {RangeLimitIPInc(&tempIP[selectedOctet]);}
+    else if (changingDeviceMode) {if(tempMode){tempMode = false;} else{tempMode = true;};}
+  } 
+  //decrement
+  else{
+    //camera settings
+    if (changingCameraIP) {RangeLimitIPDec(&tempIP[selectedOctet]);}
+    else if (changingCamersPort) {RangeLimitPortDecHundred(&tempPort);}
+    //device settings
+    else if (changingDeviceIP) {RangeLimitIPDec(&tempIP[selectedOctet]);}
+    else if (changingDeviceSubnet) {RangeLimitIPDec(&tempIP[selectedOctet]);}
+    else if (changingDeviceMode) {if(tempMode){tempMode = false;} else{tempMode = true;};}
+  }
+
+
+  if (cameraIPSetupMode){
+    cameras[SELECTED_CAMERA].ipAddress = tempIP;
+    cameras[SELECTED_CAMERA].visca_port = tempPort;
+  }else if (deviceIPSetupMode){
+    //set device values
+    deviceIP = tempIP;
+    deviceSubnet = tempSubnet;
+    deviceDHCP = tempMode;
+  }
+}
+
 // changes the values of the temporary variables being displayed
 void SettingsEncoder2(bool up){
   const int maxIP = 255;
@@ -532,11 +603,11 @@ void EvaluateSetupRXString(String RX) {
 
     // event triggers
     if (command == "encoder1_press") {
-      //Encoder1Press(value.toInt());
+      SettingsEncoder2Press();
     } else if (command == "encoder1_up") {
-      //Encoder1(true);
+      SettingsEncoder1(true);
     } else if (command == "encoder1_down") {
-      //Encoder1(false);
+      SettingsEncoder1(false);
 
     } else if (command == "encoder2_press") {
       SettingsEncoder2Press();
